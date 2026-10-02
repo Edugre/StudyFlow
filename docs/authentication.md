@@ -85,3 +85,12 @@ The detail view offers Save code and Cancel; cancel resets the unsaved input.
 No database migration or dependencies are needed. Tests verify exact strings,
 independent courses, edits, clearing, invalid input, cross-account write denial,
 and persistence after closing/reopening the database.
+
+## CM-03 — Instructor
+
+Instructor entry during creation and instructor-only editing with Save/Cancel
+are implemented. POST `/api/courses/:id/instructor` updates only that owned
+course's instructor. Optional/cleared text is supported; non-text values are
+rejected. Tests verify persistence across API/database restart, unrelated-field
+and other-course preservation, invalid input and cross-account write denial.
+General editing remains CM-06. CM-02 and CM-03 are ready for team Review.

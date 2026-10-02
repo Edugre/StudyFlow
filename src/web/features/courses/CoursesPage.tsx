@@ -10,7 +10,12 @@ async function api(path: string, body?: unknown) {
   if (!response.ok) throw new Error(data.error ?? 'Request failed');
   return data;
 }
-type SavedCourse = { id: string; name: string; code: string | null };
+type SavedCourse = {
+  id: string;
+  name: string;
+  code: string | null;
+  instructor: string | null;
+};
 export function CoursesPage() {
   const [user, setUser] = useState<{ email: string } | null>(null);
   const [ready, setReady] = useState(false);
@@ -41,7 +46,10 @@ export function CoursesPage() {
       active = false;
     };
   }, []);
-  async function saveCode(event: FormEvent<HTMLFormElement>) {
+  async function saveField(
+    event: FormEvent<HTMLFormElement>,
+    field: 'code' | 'instructor',
+  ) {
     event.preventDefault();
     if (!selected) return;
     const values = Object.fromEntries(new FormData(event.currentTarget));
@@ -49,12 +57,12 @@ export function CoursesPage() {
     setError('');
     setMessage('');
     try {
-      const { course } = await api(`/courses/${selected.id}/code`, values);
+      const { course } = await api(`/courses/${selected.id}/${field}`, values);
       setSelected(course);
       setCourses((previous) =>
         previous.map((item) => (item.id === course.id ? course : item)),
       );
-      setMessage('Course code saved.');
+      setMessage(field === 'code' ? 'Course code saved.' : 'Instructor saved.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
@@ -179,6 +187,10 @@ export function CoursesPage() {
               Course code (optional)
               <input name="code" type="text" />
             </label>
+            <label>
+              Instructor (optional)
+              <input name="instructor" type="text" />
+            </label>
             <button disabled={busy}>{busy ? 'Saving…' : 'Add course'}</button>
           </form>
           <h2>Saved courses</h2>
@@ -204,7 +216,10 @@ export function CoursesPage() {
                   {selected.code || 'Not set'}
                 </span>
               </p>
-              <form onSubmit={saveCode} key={selected.id + ':' + selected.code}>
+              <form
+                onSubmit={(event) => saveField(event, 'code')}
+                key={selected.id + ':' + selected.code}
+              >
                 <label>
                   Edit course code
                   <input
@@ -215,6 +230,26 @@ export function CoursesPage() {
                 </label>
                 <button disabled={busy}>
                   {busy ? 'Saving…' : 'Save code'}
+                </button>
+                <button type="reset" disabled={busy}>
+                  Cancel
+                </button>
+              </form>
+              <p>Instructor: {selected.instructor || 'Not set'}</p>
+              <form
+                onSubmit={(event) => saveField(event, 'instructor')}
+                key={selected.id + ':instructor:' + selected.instructor}
+              >
+                <label>
+                  Edit instructor
+                  <input
+                    name="instructor"
+                    type="text"
+                    defaultValue={selected.instructor ?? ''}
+                  />
+                </label>
+                <button disabled={busy}>
+                  {busy ? 'Saving…' : 'Save instructor'}
                 </button>
                 <button type="reset" disabled={busy}>
                   Cancel

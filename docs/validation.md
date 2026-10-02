@@ -38,3 +38,9 @@ Six tests pass, including course-code creation, code-only editing, preservation
 of exact values, independent course codes, clearing/omitted values, invalid input,
 account isolation, and persistence after database reopen. Build/type checking,
 lint and formatting pass after fixing the edit handler's component scope.
+
+## CM-03 — 2026-10-02
+
+Seven tests pass; instructor edits persist across API/database restart, preserve
+other fields/courses, and reject invalid input and other-account writes. Build,
+type checking, lint and formatting pass. Team UI review remains pending.
