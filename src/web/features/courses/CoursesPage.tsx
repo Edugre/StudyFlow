@@ -2,12 +2,13 @@ import { MeetingsEditor } from './MeetingsEditor.js';
 import type { CourseMeeting } from '../../../shared/course.js';
 import { useEffect, useState, type FormEvent } from 'react';
 
-async function api(path: string, body?: unknown) {
+async function api(path: string, body?: unknown, method?: string) {
   const response = await fetch(`/api${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: method ?? (body === undefined ? 'GET' : 'POST'),
     headers: { 'Content-Type': 'application/json', 'X-StudyFlow-Request': '1' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
+  if (response.status === 204) return null;
   const data = await response.json();
   if (!response.ok) throw new Error(data.error ?? 'Request failed');
   return data;
@@ -120,6 +121,34 @@ export function CoursesPage() {
     setBusy(false);
   }
 }
+async function deleteCourse() {
+    if (!selected) return;
+
+    const confirmed = window.confirm(
+      `Delete ${selected.name}? This action cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    setBusy(true);
+    setError('');
+    setMessage('');
+
+    try {
+      await api(`/courses/${selected.id}`, undefined, 'DELETE');
+
+      setSelected(null);
+      setCourses((previous) =>
+        previous.filter((item) => item.id !== selected.id),
+      );
+      setMessage('Course deleted.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+  
   async function saveMeetings(meetings: CourseMeeting[]) {
     if (!selected) return;
     setBusy(true);
@@ -319,6 +348,10 @@ export function CoursesPage() {
           {selected && (
             <section aria-label="Selected course">
               <h2>{selected.name}</h2>
+
+          <button type="button" onClick={deleteCourse} disabled={busy}>
+            {busy ? 'Deleting…' : 'Delete course'}
+    </button>
   <form
     onSubmit={saveCourse}
     key={
