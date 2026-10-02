@@ -70,3 +70,18 @@ References: [Node crypto](https://nodejs.org/api/crypto.html) and
 - [CM-01](https://trello.com/c/bUUOIhsS/1-cm-01-add-a-course): implementation ready for team Review.
 - [SYS-01](https://trello.com/c/iDS4ur3t/51-sys-01-student-authentication-and-account-isolation): authentication prerequisite added and ready for Review.
 - Google Doc Overview now records implementation status, account storage, validation and remaining decisions.
+
+## CM-02 — Course code
+
+Implemented course-code entry during creation and code-only editing after reopening.
+The existing SQLite `code` column stores the exact string without trimming or
+case conversion. No course-code uniqueness rule is imposed. Codes are optional;
+legacy and omitted codes remain null, and clearing a code saves an empty string.
+Non-text values are rejected. General course editing remains CM-06 work.
+
+POST `/api/courses` accepts optional `code`; POST `/api/courses/:id/code` updates
+only that owned course's code. List and reopen responses include the saved code.
+The detail view offers Save code and Cancel; cancel resets the unsaved input.
+No database migration or dependencies are needed. Tests verify exact strings,
+independent courses, edits, clearing, invalid input, cross-account write denial,
+and persistence after closing/reopening the database.

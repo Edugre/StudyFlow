@@ -148,16 +148,37 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
     response.json({ course });
   });
   app.post('/api/courses', (request, response) => {
-    const { name } = request.body ?? {};
+    const { name, code } = request.body ?? {};
     if (typeof name !== 'string' || !name.trim() || name.length > 200) {
       response
         .status(400)
         .json({ error: 'Enter a course name of 1–200 characters.' });
       return;
     }
-    response
-      .status(201)
-      .json({ course: courses.create(response.locals.userId, name.trim()) });
+    if (code !== undefined && code !== null && typeof code !== 'string') {
+      response.status(400).json({ error: 'Course code must be text.' });
+      return;
+    }
+    response.status(201).json({
+      course: courses.create(response.locals.userId, name.trim(), code ?? null),
+    });
+  });
+  app.post('/api/courses/:id/code', (request, response) => {
+    const { code } = request.body ?? {};
+    if (code !== null && typeof code !== 'string') {
+      response.status(400).json({ error: 'Course code must be text.' });
+      return;
+    }
+    const course = courses.updateCode(
+      response.locals.userId,
+      String(request.params.id),
+      code,
+    );
+    if (!course) {
+      response.status(404).json({ error: 'Course not found' });
+      return;
+    }
+    response.json({ course });
   });
   app.use('/api', (_request, response) => {
     response.status(404).json({ error: 'API route not found' });

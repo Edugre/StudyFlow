@@ -31,3 +31,10 @@ account/session persistence. The updated sign-in page renders in the existing
 local development browser. Starting an additional dev instance encountered
 ports 5173/3001 already in use; the existing process was left untouched.
 See `authentication.md` for feature coverage and remaining limits.
+
+## CM-02 — 2026-10-02
+
+Six tests pass, including course-code creation, code-only editing, preservation
+of exact values, independent course codes, clearing/omitted values, invalid input,
+account isolation, and persistence after database reopen. Build/type checking,
+lint and formatting pass after fixing the edit handler's component scope.

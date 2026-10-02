@@ -10,7 +10,7 @@ async function api(path: string, body?: unknown) {
   if (!response.ok) throw new Error(data.error ?? 'Request failed');
   return data;
 }
-type SavedCourse = { id: string; name: string };
+type SavedCourse = { id: string; name: string; code: string | null };
 export function CoursesPage() {
   const [user, setUser] = useState<{ email: string } | null>(null);
   const [ready, setReady] = useState(false);
@@ -41,6 +41,26 @@ export function CoursesPage() {
       active = false;
     };
   }, []);
+  async function saveCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected) return;
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const { course } = await api(`/courses/${selected.id}/code`, values);
+      setSelected(course);
+      setCourses((previous) =>
+        previous.map((item) => (item.id === course.id ? course : item)),
+      );
+      setMessage('Course code saved.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -155,6 +175,10 @@ export function CoursesPage() {
               Course name
               <input name="name" required maxLength={200} />
             </label>
+            <label>
+              Course code (optional)
+              <input name="code" type="text" />
+            </label>
             <button disabled={busy}>{busy ? 'Saving…' : 'Add course'}</button>
           </form>
           <h2>Saved courses</h2>
@@ -162,7 +186,7 @@ export function CoursesPage() {
             <ul>
               {courses.map((course) => (
                 <li key={course.id}>
-                  <button onClick={() => reopen(course.id)}>
+                  <button disabled={busy} onClick={() => reopen(course.id)}>
                     {course.name}
                   </button>
                 </li>
@@ -174,7 +198,28 @@ export function CoursesPage() {
           {selected && (
             <section aria-label="Selected course">
               <h2>{selected.name}</h2>
-              <p>Your course is saved and ready to reopen.</p>
+              <p>
+                Course code:{' '}
+                <span style={{ whiteSpace: 'pre-wrap' }}>
+                  {selected.code || 'Not set'}
+                </span>
+              </p>
+              <form onSubmit={saveCode} key={selected.id + ':' + selected.code}>
+                <label>
+                  Edit course code
+                  <input
+                    name="code"
+                    type="text"
+                    defaultValue={selected.code ?? ''}
+                  />
+                </label>
+                <button disabled={busy}>
+                  {busy ? 'Saving…' : 'Save code'}
+                </button>
+                <button type="reset" disabled={busy}>
+                  Cancel
+                </button>
+              </form>
             </section>
           )}
         </>

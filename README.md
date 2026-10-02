@@ -31,10 +31,10 @@ provisional choices and limitations.
 | `docs`                 | Architecture, task dependencies and team questions                              |
 
 The app has `/` and `/courses`, plus `/api/health`. Students can register,
-sign in/out, add a named course, see their saved courses, and reopen one. Records
+sign in/out, add a named course with an optional course code, see their saved courses, reopen one, and edit its code. Records
 are private to the signed-in student and persist in SQLite. This implements
 CM-01's minimal list/reopen behavior; semester filtering and full course details
-remain CM-08/09 work. Other course fields and editing/deletion are not implemented.
+remain CM-08/09 work. Other course fields, general editing and deletion are not implemented.
 
 See [authentication and CM-01](docs/authentication.md) for API details, security
 choices, migration behavior and limits.
