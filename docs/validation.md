@@ -50,3 +50,11 @@ type checking, lint and formatting pass. Team UI review remains pending.
 Eight tests pass including multiple meeting rows, invalid schedules preserving
 saved values, other-account denial, clearing and API/database restart. Build,
 type checking, lint and formatting pass.
+
+## CM-05 — 2026-10-02
+
+Nine tests pass, including semester creation/editing, filtered lists after moving
+a course, empty filters, clearing, invalid labels/query parameters, account
+isolation and API/database restart. Other course fields and meetings are
+preserved. Build/type checking, lint and formatting pass. Team UI review remains
+pending for CM-02–05.

@@ -1,4 +1,4 @@
-# Authentication and CM-01
+# Authentication and course management
 
 Implemented 2026-10-02 following authorization to implement authentication and
 CM-01. Google Drive and Trello were synchronized on 2026-10-02: CM-01 and SYS-01 are in Review. This is the team's initial local
@@ -112,3 +112,19 @@ and update responses retain meetings so editing other fields preserves schedule
 display. Eight tests pass, including multiple days, invalid days/times, equal or
 earlier end times, atomic rejection, account isolation and restart persistence.
 Build/type checking, lint and formatting pass. Team UI review is pending.
+
+## CM-05 — Semester assignment and filtering
+
+Students can assign an optional semester during creation, edit or clear it with
+Save/Cancel, and filter saved courses by semester. Saved labels are suggested in
+the editor. POST `/api/courses/:id/semester` changes only the owned course's
+semester; GET `/api/courses?semester=Fall%202026` filters within that account.
+Semester labels are trimmed, limited to 100 characters, and stored as null when
+blank. Non-text values and repeated semester query parameters are rejected.
+
+The team has not defined a term vocabulary or current-semester rule, so labels
+are student-entered and no current semester is inferred. CM-08 remains pending.
+Existing schema supports semester storage without migration. Tests cover
+creation, moving courses between semesters, filtering, clearing, account
+isolation, preservation of other fields and restart persistence. CM-01–05 and
+SYS-01 are ready for Review; team UI review remains pending.

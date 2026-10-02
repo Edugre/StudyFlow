@@ -134,9 +134,14 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
     response.locals.userId = user.id;
     next();
   });
-  app.get('/api/courses', (_request, response) =>
-    response.json({ courses: courses.list(response.locals.userId) }),
-  );
+  app.get('/api/courses', (request, response) => {
+    const semester = request.query.semester;
+    if (semester !== undefined && typeof semester !== 'string') {
+      response.status(400).json({ error: 'Semester filter must be text.' });
+      return;
+    }
+    response.json({ courses: courses.list(response.locals.userId, semester) });
+  });
   app.get('/api/courses/:id', (request, response) => {
     const course = courses.find(
       response.locals.userId,
@@ -149,7 +154,13 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
     response.json({ course });
   });
   app.post('/api/courses', (request, response) => {
-    const { name, code, instructor, meetings = [] } = request.body ?? {};
+    const {
+      name,
+      code,
+      instructor,
+      meetings = [],
+      semester,
+    } = request.body ?? {};
     if (typeof name !== 'string' || !name.trim() || name.length > 200) {
       response
         .status(400)
@@ -168,6 +179,16 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
       response.status(400).json({ error: 'Instructor must be text.' });
       return;
     }
+    if (
+      semester !== undefined &&
+      semester !== null &&
+      (typeof semester !== 'string' || semester.length > 100)
+    ) {
+      response
+        .status(400)
+        .json({ error: 'Semester must be text of at most 100 characters.' });
+      return;
+    }
     if (!validMeetings(meetings)) {
       response.status(400).json({ error: meetingError });
       return;
@@ -179,6 +200,7 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
         code ?? null,
         instructor ?? null,
         meetings,
+        typeof semester === 'string' ? semester.trim() || null : null,
       ),
     });
   });
@@ -226,6 +248,28 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
       response.locals.userId,
       String(request.params.id),
       meetings,
+    );
+    if (!course) {
+      response.status(404).json({ error: 'Course not found' });
+      return;
+    }
+    response.json({ course });
+  });
+  app.post('/api/courses/:id/semester', (request, response) => {
+    const { semester } = request.body ?? {};
+    if (
+      semester !== null &&
+      (typeof semester !== 'string' || semester.length > 100)
+    ) {
+      response
+        .status(400)
+        .json({ error: 'Semester must be text of at most 100 characters.' });
+      return;
+    }
+    const course = courses.updateSemester(
+      response.locals.userId,
+      String(request.params.id),
+      typeof semester === 'string' ? semester.trim() || null : null,
     );
     if (!course) {
       response.status(404).json({ error: 'Course not found' });

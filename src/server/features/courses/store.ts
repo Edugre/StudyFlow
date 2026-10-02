@@ -7,12 +7,13 @@ type Row = {
   name: string;
   code: string | null;
   instructor: string | null;
+  semester: string | null;
 };
 export function courseStore(db: DatabaseSync) {
   const find = (ownerId: string, id: string) => {
     const row = db
       .prepare(
-        'SELECT id, name, code, instructor FROM courses WHERE owner_id = ? AND id = ?',
+        'SELECT id, name, code, instructor, semester FROM courses WHERE owner_id = ? AND id = ?',
       )
       .get(ownerId, id) as Row | undefined;
     if (!row) return undefined;
@@ -38,13 +39,14 @@ export function courseStore(db: DatabaseSync) {
       code: string | null = null,
       instructor: string | null = null,
       meetings: CourseMeeting[] = [],
+      semester: string | null = null,
     ) {
       const id = randomUUID();
       db.exec('BEGIN');
       try {
         db.prepare(
-          'INSERT INTO courses(id, owner_id, name, code, instructor) VALUES (?, ?, ?, ?, ?)',
-        ).run(id, ownerId, name, code, instructor);
+          'INSERT INTO courses(id, owner_id, name, code, instructor, semester) VALUES (?, ?, ?, ?, ?, ?)',
+        ).run(id, ownerId, name, code, instructor, semester);
         replaceMeetings(id, meetings);
         db.exec('COMMIT');
       } catch (error) {
@@ -77,10 +79,22 @@ export function courseStore(db: DatabaseSync) {
       }
       return find(ownerId, id);
     },
-    list(ownerId: string) {
+    updateSemester(ownerId: string, id: string, semester: string | null) {
+      db.prepare(
+        'UPDATE courses SET semester = ? WHERE owner_id = ? AND id = ?',
+      ).run(semester, ownerId, id);
+      return find(ownerId, id);
+    },
+    list(ownerId: string, semester?: string) {
+      if (semester !== undefined)
+        return db
+          .prepare(
+            'SELECT id, name, code, instructor, semester FROM courses WHERE owner_id = ? AND semester = ? ORDER BY rowid',
+          )
+          .all(ownerId, semester);
       return db
         .prepare(
-          'SELECT id, name, code, instructor FROM courses WHERE owner_id = ? ORDER BY rowid',
+          'SELECT id, name, code, instructor, semester FROM courses WHERE owner_id = ? ORDER BY rowid',
         )
         .all(ownerId);
     },

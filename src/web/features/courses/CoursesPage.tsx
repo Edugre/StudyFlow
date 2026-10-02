@@ -17,6 +17,7 @@ type SavedCourse = {
   name: string;
   code: string | null;
   instructor: string | null;
+  semester: string | null;
   meetings: CourseMeeting[];
 };
 export function CoursesPage() {
@@ -27,6 +28,17 @@ export function CoursesPage() {
   const [selected, setSelected] = useState<SavedCourse | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [semesterFilter, setSemesterFilter] = useState('');
+  const semesters = [
+    ...new Set(
+      courses
+        .map((course) => course.semester)
+        .filter((semester): semester is string => Boolean(semester)),
+    ),
+  ].sort();
+  const visibleCourses = semesterFilter
+    ? courses.filter((course) => course.semester === semesterFilter)
+    : courses;
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
@@ -51,7 +63,7 @@ export function CoursesPage() {
   }, []);
   async function saveField(
     event: FormEvent<HTMLFormElement>,
-    field: 'code' | 'instructor',
+    field: 'code' | 'instructor' | 'semester',
   ) {
     event.preventDefault();
     if (!selected) return;
@@ -62,10 +74,17 @@ export function CoursesPage() {
     try {
       const { course } = await api(`/courses/${selected.id}/${field}`, values);
       setSelected(course);
+      if (field === 'semester') setSemesterFilter('');
       setCourses((previous) =>
         previous.map((item) => (item.id === course.id ? course : item)),
       );
-      setMessage(field === 'code' ? 'Course code saved.' : 'Instructor saved.');
+      setMessage(
+        field === 'code'
+          ? 'Course code saved.'
+          : field === 'instructor'
+            ? 'Instructor saved.'
+            : 'Semester saved.',
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
@@ -109,6 +128,7 @@ export function CoursesPage() {
         const data = await api('/courses', values);
         setCourses((previous) => [...previous, data.course]);
         setSelected(data.course);
+        setSemesterFilter('');
         setMessage('Course saved.');
         form.reset();
       }
@@ -127,6 +147,7 @@ export function CoursesPage() {
       setCourses([]);
       setSelected(null);
       setMessage('');
+      setSemesterFilter('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
@@ -214,12 +235,44 @@ export function CoursesPage() {
               Instructor (optional)
               <input name="instructor" type="text" />
             </label>
+            <label>
+              Semester (optional)
+              <input
+                name="semester"
+                list="semester-options"
+                maxLength={100}
+                placeholder="e.g. Fall 2026"
+              />
+            </label>
             <button disabled={busy}>{busy ? 'Saving…' : 'Add course'}</button>
           </form>
           <h2>Saved courses</h2>
-          {courses.length ? (
+          <label>
+            Filter by semester
+            <select
+              value={semesterFilter}
+              disabled={busy}
+              onChange={(event) => {
+                setSemesterFilter(event.target.value);
+                setSelected(null);
+              }}
+            >
+              <option value="">All semesters</option>
+              {semesters.map((semester) => (
+                <option key={semester} value={semester}>
+                  {semester}
+                </option>
+              ))}
+            </select>
+          </label>
+          <datalist id="semester-options">
+            {semesters.map((semester) => (
+              <option key={semester} value={semester} />
+            ))}
+          </datalist>
+          {visibleCourses.length ? (
             <ul>
-              {courses.map((course) => (
+              {visibleCourses.map((course) => (
                 <li key={course.id}>
                   <button disabled={busy} onClick={() => reopen(course.id)}>
                     {course.name}
@@ -228,7 +281,11 @@ export function CoursesPage() {
               ))}
             </ul>
           ) : (
-            <p>No courses yet. Add your first course above.</p>
+            <p>
+              {semesterFilter
+                ? 'No courses in this semester.'
+                : 'No courses yet. Add your first course above.'}
+            </p>
           )}
           {selected && (
             <section aria-label="Selected course">
@@ -273,6 +330,27 @@ export function CoursesPage() {
                 </label>
                 <button disabled={busy}>
                   {busy ? 'Saving…' : 'Save instructor'}
+                </button>
+                <button type="reset" disabled={busy}>
+                  Cancel
+                </button>
+              </form>
+              <p>Semester: {selected.semester || 'Not set'}</p>
+              <form
+                onSubmit={(event) => saveField(event, 'semester')}
+                key={selected.id + ':semester:' + selected.semester}
+              >
+                <label>
+                  Edit semester
+                  <input
+                    name="semester"
+                    list="semester-options"
+                    maxLength={100}
+                    defaultValue={selected.semester ?? ''}
+                  />
+                </label>
+                <button disabled={busy}>
+                  {busy ? 'Saving…' : 'Save semester'}
                 </button>
                 <button type="reset" disabled={busy}>
                   Cancel

@@ -31,10 +31,9 @@ provisional choices and limitations.
 | `docs`                 | Architecture, task dependencies and team questions                              |
 
 The app has `/` and `/courses`, plus `/api/health`. Students can register,
-sign in/out, add a named course with an optional course code, see their saved courses, reopen one, and edit its code, instructor, or meeting schedule. Records
+sign in/out, add a named course with optional code, instructor and semester, filter saved courses by semester, reopen one, and edit its code, instructor, semester or meeting schedule. Records
 are private to the signed-in student and persist in SQLite. This implements
-CM-01's minimal list/reopen behavior; semester filtering and full course details
-remain CM-08/09 work. Other course fields, general editing and deletion are not implemented.
+CM-01's minimal list/reopen behavior and CM-02–05's individual fields. The current-semester view and full course details remain CM-08/09 work. General editing and deletion are not implemented.
 
 See [authentication and CM-01](docs/authentication.md) for API details, security
 choices, migration behavior and limits.
@@ -86,7 +85,7 @@ Local HTTP development leaves this unset.
 
 ## Current implementation plan
 
-CM-01–CM-04 and [SYS-01 authentication](https://trello.com/c/iDS4ur3t/51-sys-01-student-authentication-and-account-isolation) are in **Review**. Trello's **This Week** list now contains CM-05–CM-10. The course task map is:
+CM-01–CM-05 and [SYS-01 authentication](https://trello.com/c/iDS4ur3t/51-sys-01-student-authentication-and-account-isolation) are in **Review**. Trello's **This Week** list now contains CM-06–CM-10. The course task map is:
 
 | Code  | Task                               | Trello dependencies                                           |
 | ----- | ---------------------------------- | ------------------------------------------------------------- |
