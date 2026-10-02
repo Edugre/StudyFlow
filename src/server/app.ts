@@ -362,6 +362,21 @@ app.post('/api/courses/:id', (request, response) => {
 
     response.json({ course });
   });
+  
+app.delete('/api/courses/:id', (request, response) => {
+    const deleted = courses.delete(
+      response.locals.userId,
+      String(request.params.id),
+    );
+
+    if (!deleted) {
+      response.status(404).json({ error: 'Course not found' });
+      return;
+    }
+
+    response.status(204).send();
+  });
+
   app.use('/api', (_request, response) => {
     response.status(404).json({ error: 'API route not found' });
   });
