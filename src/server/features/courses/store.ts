@@ -87,7 +87,7 @@ export function courseStore(db: DatabaseSync) {
       ).run(semester, ownerId, id);
       return find(ownerId, id);
     },
-update(
+  update(
   ownerId: string,
   id: string,
   name: string,
@@ -126,6 +126,16 @@ update(
 
   return find(ownerId, id);
 },
+    delete(ownerId: string, id: string) {
+      const result = db
+        .prepare(
+          'DELETE FROM courses WHERE owner_id = ? AND id = ?',
+        )
+        .run(ownerId, id);
+
+      return result.changes > 0;
+    },
+    
     list(ownerId: string, semester?: string) {
       if (semester !== undefined)
         return db
