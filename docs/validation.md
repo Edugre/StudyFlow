@@ -44,3 +44,9 @@ lint and formatting pass after fixing the edit handler's component scope.
 Seven tests pass; instructor edits persist across API/database restart, preserve
 other fields/courses, and reject invalid input and other-account writes. Build,
 type checking, lint and formatting pass. Team UI review remains pending.
+
+## CM-04 — 2026-10-02
+
+Eight tests pass including multiple meeting rows, invalid schedules preserving
+saved values, other-account denial, clearing and API/database restart. Build,
+type checking, lint and formatting pass.

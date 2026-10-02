@@ -11,6 +11,7 @@ import {
   digest,
   randomUUID,
 } from './features/auth/auth.js';
+import { validMeetings, meetingError } from './features/courses/meetings.js';
 import { courseStore } from './features/courses/store.js';
 
 export function createApp(db: DatabaseSync, webDirectory?: string) {
@@ -148,7 +149,7 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
     response.json({ course });
   });
   app.post('/api/courses', (request, response) => {
-    const { name, code, instructor } = request.body ?? {};
+    const { name, code, instructor, meetings = [] } = request.body ?? {};
     if (typeof name !== 'string' || !name.trim() || name.length > 200) {
       response
         .status(400)
@@ -167,12 +168,17 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
       response.status(400).json({ error: 'Instructor must be text.' });
       return;
     }
+    if (!validMeetings(meetings)) {
+      response.status(400).json({ error: meetingError });
+      return;
+    }
     response.status(201).json({
       course: courses.create(
         response.locals.userId,
         name.trim(),
         code ?? null,
         instructor ?? null,
+        meetings,
       ),
     });
   });
@@ -203,6 +209,23 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
       response.locals.userId,
       String(request.params.id),
       instructor,
+    );
+    if (!course) {
+      response.status(404).json({ error: 'Course not found' });
+      return;
+    }
+    response.json({ course });
+  });
+  app.post('/api/courses/:id/meetings', (request, response) => {
+    const { meetings } = request.body ?? {};
+    if (!validMeetings(meetings)) {
+      response.status(400).json({ error: meetingError });
+      return;
+    }
+    const course = courses.updateMeetings(
+      response.locals.userId,
+      String(request.params.id),
+      meetings,
     );
     if (!course) {
       response.status(404).json({ error: 'Course not found' });

@@ -94,3 +94,21 @@ course's instructor. Optional/cleared text is supported; non-text values are
 rejected. Tests verify persistence across API/database restart, unrelated-field
 and other-course preservation, invalid input and cross-account write denial.
 General editing remains CM-06. CM-02 and CM-03 are ready for team Review.
+
+## CM-04 — Course meetings
+
+Students can add/remove weekday and start/end-time entries in the selected
+course's meeting editor, save the whole schedule, or cancel unsaved edits. Every
+saved meeting is displayed after reopening. Empty schedules are supported.
+POST `/api/courses` accepts optional `meetings`; POST
+`/api/courses/:id/meetings` replaces an owned course's schedule transactionally.
+Invalid updates preserve all saved meetings; invalid creation adds no course.
+
+Times use local HH:MM and must end later on the same day, matching the documented
+criterion. Timezones and overnight meetings are not inferred. The initial limit
+is 100 meeting rows per course for bounded requests. No overlap or deduplication
+rule is invented. Existing schema supports this without migration. All detail
+and update responses retain meetings so editing other fields preserves schedule
+display. Eight tests pass, including multiple days, invalid days/times, equal or
+earlier end times, atomic rejection, account isolation and restart persistence.
+Build/type checking, lint and formatting pass. Team UI review is pending.

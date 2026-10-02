@@ -1,3 +1,5 @@
+import { MeetingsEditor } from './MeetingsEditor.js';
+import type { CourseMeeting } from '../../../shared/course.js';
 import { useEffect, useState, type FormEvent } from 'react';
 
 async function api(path: string, body?: unknown) {
@@ -15,6 +17,7 @@ type SavedCourse = {
   name: string;
   code: string | null;
   instructor: string | null;
+  meetings: CourseMeeting[];
 };
 export function CoursesPage() {
   const [user, setUser] = useState<{ email: string } | null>(null);
@@ -63,6 +66,26 @@ export function CoursesPage() {
         previous.map((item) => (item.id === course.id ? course : item)),
       );
       setMessage(field === 'code' ? 'Course code saved.' : 'Instructor saved.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function saveMeetings(meetings: CourseMeeting[]) {
+    if (!selected) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const { course } = await api(`/courses/${selected.id}/meetings`, {
+        meetings,
+      });
+      setSelected(course);
+      setCourses((previous) =>
+        previous.map((item) => (item.id === course.id ? course : item)),
+      );
+      setMessage('Meetings saved.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
@@ -255,6 +278,25 @@ export function CoursesPage() {
                   Cancel
                 </button>
               </form>
+              <h3>Course schedule</h3>
+              {selected.meetings.length ? (
+                <ul>
+                  {selected.meetings.map((meeting, index) => (
+                    <li key={index}>
+                      {meeting.day.toUpperCase()} {meeting.startTime}–
+                      {meeting.endTime}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No meetings set.</p>
+              )}
+              <MeetingsEditor
+                key={selected.id + JSON.stringify(selected.meetings)}
+                meetings={selected.meetings}
+                busy={busy}
+                onSave={saveMeetings}
+              />
             </section>
           )}
         </>
