@@ -277,6 +277,91 @@ export function createApp(db: DatabaseSync, webDirectory?: string) {
     }
     response.json({ course });
   });
+app.post('/api/courses/:id', (request, response) => {
+    const {
+      name,
+      code,
+      instructor,
+      semester,
+      location,
+      notes,
+      meetings = [],
+    } = request.body ?? {};
+
+    if (typeof name !== 'string' || !name.trim() || name.length > 200) {
+      response
+        .status(400)
+        .json({ error: 'Enter a course name of 1–200 characters.' });
+      return;
+    }
+
+    if (code !== undefined && code !== null && typeof code !== 'string') {
+      response.status(400).json({ error: 'Course code must be text.' });
+      return;
+    }
+
+    if (
+      instructor !== undefined &&
+      instructor !== null &&
+      typeof instructor !== 'string'
+    ) {
+      response.status(400).json({ error: 'Instructor must be text.' });
+      return;
+    }
+
+    if (
+      semester !== undefined &&
+      semester !== null &&
+      (typeof semester !== 'string' || semester.length > 100)
+    ) {
+      response
+        .status(400)
+        .json({ error: 'Semester must be text of at most 100 characters.' });
+      return;
+    }
+
+    if (
+      location !== undefined &&
+      location !== null &&
+      typeof location !== 'string'
+    ) {
+      response.status(400).json({ error: 'Location must be text.' });
+      return;
+    }
+
+    if (
+      notes !== undefined &&
+      notes !== null &&
+      typeof notes !== 'string'
+    ) {
+      response.status(400).json({ error: 'Notes must be text.' });
+      return;
+    }
+
+    if (!validMeetings(meetings)) {
+      response.status(400).json({ error: meetingError });
+      return;
+    }
+
+    const course = courses.update(
+      response.locals.userId,
+      String(request.params.id),
+      name.trim(),
+      code ?? null,
+      instructor ?? null,
+      typeof semester === 'string' ? semester.trim() || null : null,
+      location ?? null,
+      notes ?? null,
+      meetings,
+    );
+
+    if (!course) {
+      response.status(404).json({ error: 'Course not found' });
+      return;
+    }
+
+    response.json({ course });
+  });
   app.use('/api', (_request, response) => {
     response.status(404).json({ error: 'API route not found' });
   });
