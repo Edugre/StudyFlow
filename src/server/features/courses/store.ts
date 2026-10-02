@@ -87,7 +87,7 @@ export function courseStore(db: DatabaseSync) {
       ).run(semester, ownerId, id);
       return find(ownerId, id);
     },
-    update(
+update(
   ownerId: string,
   id: string,
   name: string,
