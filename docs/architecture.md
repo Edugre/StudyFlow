@@ -1,3 +1,8 @@
+# Architecture decision history
+
+Current implementation: see [authentication and CM-01](authentication.md). The
+initial scaffold decision below is retained as historical context.
+
 # Initial architecture decision
 
 Recorded 2026-10-01. Status: scaffold choice, pending team review.

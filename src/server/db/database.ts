@@ -40,8 +40,18 @@ export function openDatabase(path: string): DatabaseSync {
         db.exec('ROLLBACK');
         throw error;
       }
-    } else if (version !== 1) {
+    } else if (version !== 1 && version !== 2) {
       throw new Error('Unsupported database schema version');
+    }
+    if (version != 2) {
+      db.exec(`BEGIN;
+        CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL) STRICT;
+        CREATE TABLE sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL) STRICT;
+        CREATE TRIGGER course_owner_insert BEFORE INSERT ON courses
+        WHEN NOT EXISTS (SELECT 1 FROM users WHERE id = NEW.owner_id)
+        BEGIN SELECT RAISE(ABORT, 'Unknown course owner'); END;
+        PRAGMA user_version = 2;
+        COMMIT;`);
     }
     return db;
   } catch (error) {

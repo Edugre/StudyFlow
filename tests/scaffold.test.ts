@@ -7,8 +7,8 @@ import { test } from 'node:test';
 import { createApp } from '../src/server/app.js';
 import { openDatabase } from '../src/server/db/database.js';
 
-test('API health is available and course routes are not exposed before auth', async () => {
-  const server = createApp().listen(0, '127.0.0.1');
+test('API health is available and course routes require auth', async () => {
+  const server = createApp(openDatabase(':memory:')).listen(0, '127.0.0.1');
   await once(server, 'listening');
   try {
     const address = server.address();
@@ -18,7 +18,7 @@ test('API health is available and course routes are not exposed before auth', as
       status: 'ok',
       service: 'studyflow',
     });
-    assert.equal((await fetch(`${base}/api/courses`)).status, 404);
+    assert.equal((await fetch(`${base}/api/courses`)).status, 401);
   } finally {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
@@ -36,6 +36,11 @@ test('baseline persists across reopen; invalid names, owners, meetings and dangl
     );
     assert.throws(() => insert.run('bad', 'owner', ' '));
     assert.throws(() => insert.run('bad', '', 'Course'));
+    db.prepare('INSERT INTO users VALUES (?, ?, ?)').run(
+      'owner',
+      'owner@example.com',
+      'test-hash',
+    );
     insert.run('course', 'owner', 'Software Engineering');
     const meeting = db.prepare(
       'INSERT INTO course_meetings(course_id, day, start_time, end_time) VALUES (?, ?, ?, ?)',
@@ -59,6 +64,57 @@ test('baseline persists across reopen; invalid names, owners, meetings and dangl
     assert.equal(
       db.prepare('SELECT count(*) AS count FROM course_meetings').get()?.count,
       0,
+    );
+  } finally {
+    db.close();
+    rmSync(directory, { recursive: true });
+  }
+});
+
+test('version 1 upgrades preserve legacy courses and add account persistence', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'studyflow-upgrade-'));
+  const path = join(directory, 'test.sqlite');
+  let db = openDatabase(path);
+  try {
+    db.exec(
+      'DROP TRIGGER course_owner_insert; DROP TABLE sessions; DROP TABLE users; PRAGMA user_version = 1;',
+    );
+    db.prepare('INSERT INTO courses(id, owner_id, name) VALUES (?, ?, ?)').run(
+      'legacy',
+      'legacy-owner',
+      'Legacy course',
+    );
+    db.close();
+    db = openDatabase(path);
+    assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 2);
+    assert.equal(
+      db.prepare('SELECT name FROM courses WHERE id = ?').get('legacy')?.name,
+      'Legacy course',
+    );
+    assert.throws(() =>
+      db
+        .prepare('INSERT INTO courses(id, owner_id, name) VALUES (?, ?, ?)')
+        .run('new', 'unknown', 'Invalid owner'),
+    );
+    db.prepare('INSERT INTO users VALUES (?, ?, ?)').run(
+      'student',
+      'student@example.com',
+      'hashed-password',
+    );
+    db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(
+      'token-digest',
+      'student',
+      Date.now() + 10000,
+    );
+    db.close();
+    db = openDatabase(path);
+    assert.equal(
+      db.prepare('SELECT email FROM users WHERE id = ?').get('student')?.email,
+      'student@example.com',
+    );
+    assert.equal(
+      db.prepare('SELECT user_id FROM sessions').get()?.user_id,
+      'student',
     );
   } finally {
     db.close();

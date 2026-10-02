@@ -11,6 +11,7 @@ const host = process.env.HOST ?? '127.0.0.1';
 const db = openDatabase(process.env.DATABASE_PATH ?? './data/studyflow.sqlite');
 const webDirectory = resolve('dist/web');
 const app = createApp(
+  db,
   existsSync(resolve(webDirectory, 'index.html')) ? webDirectory : undefined,
 );
 const server = app.listen(port, host, () => {

@@ -22,3 +22,12 @@ Temporary servers were stopped after verification.
 
 These checks establish the scaffold only. No authentication, course story,
 cross-account data access, or feature UI acceptance test is implemented yet.
+
+## Authentication and CM-01 — 2026-10-02
+
+Build/type checking, lint and formatting pass. Five tests pass, including the
+new authentication/isolation flow, rate limiting, and version-1 migration with
+account/session persistence. The updated sign-in page renders in the existing
+local development browser. Starting an additional dev instance encountered
+ports 5173/3001 already in use; the existing process was left untouched.
+See `authentication.md` for feature coverage and remaining limits.

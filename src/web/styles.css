@@ -29,3 +29,37 @@ a:focus-visible {
 h1 {
   line-height: 1.2;
 }
+form {
+  display: grid;
+  gap: 1rem;
+  max-width: 30rem;
+  margin-bottom: 1rem;
+}
+label {
+  display: grid;
+  gap: 0.3rem;
+}
+input,
+button {
+  font: inherit;
+  padding: 0.6rem;
+  border: 1px solid #859aa4;
+  border-radius: 0.3rem;
+}
+button {
+  cursor: pointer;
+  background: white;
+  color: #175d72;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+[role='alert'] {
+  color: #a02020;
+}
+section {
+  padding: 1rem;
+  background: white;
+  margin-top: 1rem;
+}

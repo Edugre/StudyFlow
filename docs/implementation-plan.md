@@ -1,5 +1,9 @@
 # Implementation map
 
+Update 2026-10-02: authentication and CM-01 are implemented locally. See
+[implementation details](authentication.md). The source review and task map
+below remain the 2026-10-01 snapshot. Synchronization on 2026-10-02 moved CM-01 to Review and added SYS-01 in Review; CM-02–CM-10 remain This Week.
+
 Read-only source review on 2026-10-01. Google Doc stories and all 50 Trello card acceptance criteria agree verbatim. This map records dependencies, not completion. Trello list placement defines current work; no calendar dates or assigned owners are set on the cards.
 
 | Feature                 | Cards       | Current list    | Planned module                                                                    |
