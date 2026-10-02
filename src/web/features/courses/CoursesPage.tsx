@@ -18,6 +18,8 @@ type SavedCourse = {
   code: string | null;
   instructor: string | null;
   semester: string | null;
+  location: string | null;
+  notes: string | null;
   meetings: CourseMeeting[];
 };
 export function CoursesPage() {
@@ -91,6 +93,33 @@ export function CoursesPage() {
       setBusy(false);
     }
   }
+  async function saveCourse(event: FormEvent<HTMLFormElement>) {
+  event.preventDefault();
+  if (!selected) return;
+
+  const values = Object.fromEntries(new FormData(event.currentTarget));
+
+  setBusy(true);
+  setError('');
+  setMessage('');
+
+  try {
+    const { course } = await api(`/courses/${selected.id}`, {
+      ...values,
+      meetings: selected.meetings,
+    });
+
+    setSelected(course);
+    setCourses((previous) =>
+      previous.map((item) => (item.id === course.id ? course : item)),
+    );
+    setMessage('Course information saved.');
+  } catch (e) {
+    setError(e instanceof Error ? e.message : 'Request failed');
+  } finally {
+    setBusy(false);
+  }
+}
   async function saveMeetings(meetings: CourseMeeting[]) {
     if (!selected) return;
     setBusy(true);
@@ -290,6 +319,55 @@ export function CoursesPage() {
           {selected && (
             <section aria-label="Selected course">
               <h2>{selected.name}</h2>
+  <form
+    onSubmit={saveCourse}
+    key={
+    selected.id +
+    ':course:' +
+    selected.name +
+    ':' +
+    selected.location +
+    ':' +
+    selected.notes
+  }
+>
+  <h3>Edit course information</h3>
+
+  <label>
+    Course name
+    <input
+      name="name"
+      required
+      maxLength={200}
+      defaultValue={selected.name}
+    />
+  </label>
+
+  <label>
+    Location (optional)
+    <input
+      name="location"
+      type="text"
+      defaultValue={selected.location ?? ''}
+    />
+  </label>
+
+  <label>
+    Notes (optional)
+    <textarea
+      name="notes"
+      defaultValue={selected.notes ?? ''}
+    />
+  </label>
+
+  <button disabled={busy}>
+    {busy ? 'Saving…' : 'Save course information'}
+  </button>
+
+  <button type="reset" disabled={busy}>
+    Cancel
+  </button>
+</form>
               <p>
                 Course code:{' '}
                 <span style={{ whiteSpace: 'pre-wrap' }}>
