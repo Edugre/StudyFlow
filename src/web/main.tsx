@@ -1,8 +1,18 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
-import { CoursesPage } from './features/courses/CoursesPage.js';
 import './styles.css';
+
+// Loaded lazily so a missing Supabase configuration cannot blank the whole app.
+const CoursesPage = lazy(() =>
+  import('./features/courses/CoursesPage.js').then((module) => ({
+    default: module.CoursesPage,
+  })),
+);
+const configured = Boolean(
+  import.meta.env.VITE_SUPABASE_URL &&
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+);
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -27,7 +37,25 @@ createRoot(document.getElementById('root')!).render(
               </>
             }
           />
-          <Route path="/courses" element={<CoursesPage />} />
+          <Route
+            path="/courses"
+            element={
+              configured ? (
+                <Suspense fallback={<p>Loading your workspace…</p>}>
+                  <CoursesPage />
+                </Suspense>
+              ) : (
+                <>
+                  <h1>Courses are unavailable</h1>
+                  <p role="alert">
+                    StudyFlow is not connected to its database. Set
+                    VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY, then
+                    rebuild.
+                  </p>
+                </>
+              )
+            }
+          />
           <Route
             path="*"
             element={
