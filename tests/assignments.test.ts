@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   completeAssignment,
   createAssignment,
+  deleteAssignment,
   editAssignment,
   findAssignment,
   listAssignments,
@@ -320,5 +321,42 @@ test(
       /Assignment not found/,
     );
     assert.deepEqual(await findAssignment(student, lab.id), labBefore);
+  },
+);
+
+test(
+  'AT-08: a deleted task leaves the task list and its course',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const other = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const essay = await createAssignment(student, {
+      title: 'Essay',
+      courseId: math.id,
+    });
+    const lab = await createAssignment(student, {
+      title: 'Lab',
+      courseId: math.id,
+    });
+
+    // Another student's delete removes nothing.
+    assert.equal(await deleteAssignment(other, essay.id), false);
+    assert.equal((await findAssignment(student, essay.id))?.title, 'Essay');
+
+    assert.equal(await deleteAssignment(student, essay.id), true);
+    assert.equal(await findAssignment(student, essay.id), null);
+    assert.deepEqual(
+      (await listAssignments(student)).map((task) => task.id),
+      [lab.id],
+    );
+    assert.deepEqual(
+      (await listAssignments(student, math.id)).map((task) => task.id),
+      [lab.id],
+    );
+
+    // Deleting again, or an unknown id, finds nothing.
+    assert.equal(await deleteAssignment(student, essay.id), false);
+    assert.equal(await deleteAssignment(student, 'not-a-uuid'), false);
   },
 );

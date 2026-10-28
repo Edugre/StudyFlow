@@ -11,6 +11,7 @@ import { listCourses, type SavedCourse } from '../courses/course-api.js';
 import {
   completeAssignment,
   createAssignment,
+  deleteAssignment,
   editAssignment,
   findAssignment,
   listAssignments,
@@ -48,6 +49,7 @@ export function TasksPage() {
  * AT-03: each task can have a due date with an optional time.
  * AT-06: a task can be marked completed, once.
  * AT-07: every editable detail can be changed in one form, or cancelled.
+ * AT-08: a task can be deleted after confirming.
  */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
@@ -134,6 +136,22 @@ function TaskList() {
       setEditing(false);
       return saved;
     }, 'Task saved.');
+  }
+
+  function deleteTask(task: Assignment) {
+    const confirmed = window.confirm(
+      `Delete ${task.title}? This action cannot be undone.`,
+    );
+    if (!confirmed) return;
+    void run(async () => {
+      if (!(await deleteAssignment(supabase, task.id)))
+        throw new Error('Task not found');
+      setTasks((previous) => previous.filter((item) => item.id !== task.id));
+      opening.current = null;
+      setEditing(false);
+      setSelected(null);
+      return 'Task deleted.';
+    });
   }
 
   const courseName = (task: Assignment) =>
@@ -342,6 +360,13 @@ function TaskList() {
               Edit task
             </button>
           )}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => deleteTask(selected)}
+          >
+            Delete task
+          </button>
         </section>
       )}
     </>
