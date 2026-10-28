@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import type { Assignment } from '../../../shared/assignment.js';
+import {
+  kindLabel,
+  taskKinds,
+  type Assignment,
+} from '../../../shared/assignment.js';
 import { supabase } from '../../lib/supabase.js';
 import { AuthGate } from '../auth/AuthGate.js';
 import { listCourses, type SavedCourse } from '../courses/course-api.js';
@@ -8,7 +12,14 @@ import {
   findAssignment,
   listAssignments,
   setAssignmentCourse,
+  setAssignmentKind,
 } from './assignment-api.js';
+
+const kindOptions = taskKinds.map((kind) => (
+  <option key={kind} value={kind}>
+    {kindLabel(kind)}
+  </option>
+));
 
 export function TasksPage() {
   return (
@@ -22,6 +33,7 @@ export function TasksPage() {
 /**
  * AT-01: every task the student has saved, with or without a course.
  * AT-02: each task can be linked to one of the student's courses.
+ * AT-04: each task is an assignment, exam, quiz, or project.
  */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
@@ -72,6 +84,7 @@ function TaskList() {
       const saved = await createAssignment(supabase, {
         title: values.title,
         courseId: values.courseId,
+        kind: values.kind,
       });
       setTasks((previous) => [...previous, saved]);
       opening.current = null;
@@ -89,6 +102,17 @@ function TaskList() {
       );
       setSelected(saved);
       return 'Course saved.';
+    });
+  }
+
+  function changeKind(id: string, kind: string) {
+    void run(async () => {
+      const saved = await setAssignmentKind(supabase, id, kind);
+      setTasks((previous) =>
+        previous.map((task) => (task.id === id ? saved : task)),
+      );
+      setSelected(saved);
+      return 'Type saved.';
     });
   }
 
@@ -132,6 +156,12 @@ function TaskList() {
           <input name="title" required maxLength={200} />
         </label>
         <label>
+          Type
+          <select name="kind" defaultValue="assignment">
+            {kindOptions}
+          </select>
+        </label>
+        <label>
           Course (optional)
           <select name="courseId" defaultValue="">
             {courseOptions}
@@ -148,7 +178,8 @@ function TaskList() {
             <li key={task.id}>
               <button disabled={busy} onClick={() => reopen(task.id)}>
                 {task.title}
-              </button>
+              </button>{' '}
+              <span className="tag">{kindLabel(task.kind)}</span>
               {courseName(task) && ` — ${courseName(task)}`}
             </li>
           ))}
@@ -161,10 +192,24 @@ function TaskList() {
           <h2>{selected.title}</h2>
           <dl className="course-details">
             <div>
+              <dt>Type</dt>
+              <dd>{kindLabel(selected.kind)}</dd>
+            </div>
+            <div>
               <dt>Course</dt>
               <dd>{courseName(selected) ?? 'No course'}</dd>
             </div>
           </dl>
+          <label>
+            Change type
+            <select
+              value={selected.kind}
+              disabled={busy}
+              onChange={(event) => changeKind(selected.id, event.target.value)}
+            >
+              {kindOptions}
+            </select>
+          </label>
           <label>
             Change course
             <select

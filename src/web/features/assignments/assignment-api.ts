@@ -1,17 +1,27 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
-import type { Assignment } from '../../../shared/assignment.js';
+import {
+  taskKinds,
+  type Assignment,
+  type TaskKind,
+} from '../../../shared/assignment.js';
 import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 
 /**
- * Minimal assignment data access (AT-01) with course links (CM-10, AT-02).
- * Ownership is enforced by row level security, as for courses.
+ * Assignment data access (AT-01) with course links (CM-10, AT-02) and
+ * task types (AT-04). Ownership is enforced by row level security.
  */
-type Row = { id: string; title: string; course_id: string | null };
-const columns = 'id, title, course_id';
+type Row = {
+  id: string;
+  title: string;
+  course_id: string | null;
+  kind: TaskKind;
+};
+const columns = 'id, title, course_id, kind';
 const toAssignment = (row: Row): Assignment => ({
   id: row.id,
   title: row.title,
   courseId: row.course_id,
+  kind: row.kind,
 });
 function fail(error: PostgrestError): never {
   failLinked(error, 'assignment details');
@@ -23,6 +33,13 @@ function title(value: unknown) {
   return value;
 }
 
+/** A missing type means a plain assignment. */
+function kind(value: unknown = 'assignment') {
+  if (!taskKinds.includes(value as TaskKind))
+    throw new Error('Choose assignment, exam, quiz, or project.');
+  return value as TaskKind;
+}
+
 // Arguments are validated before touching the client so bad input never leaves the browser.
 export async function createAssignment(
   client: SupabaseClient,
@@ -31,6 +48,7 @@ export async function createAssignment(
   const row = {
     title: title(input.title),
     course_id: courseLink(input.courseId),
+    kind: kind(input.kind),
   };
   const { data, error } = await client
     .from('assignments')
@@ -78,6 +96,25 @@ export async function setAssignmentCourse(
   const { data, error } = await client
     .from('assignments')
     .update({ course_id })
+    .eq('id', id)
+    .select(columns);
+  if (error) fail(error);
+  const [row] = data as Row[];
+  if (!row) throw new Error('Assignment not found');
+  return toAssignment(row);
+}
+
+/** Changes only the task's type; its other details stay as saved. */
+export async function setAssignmentKind(
+  client: SupabaseClient,
+  id: string,
+  value: unknown,
+) {
+  const update = { kind: kind(value) };
+  if (!isId(id)) throw new Error('Assignment not found');
+  const { data, error } = await client
+    .from('assignments')
+    .update(update)
     .eq('id', id)
     .select(columns);
   if (error) fail(error);

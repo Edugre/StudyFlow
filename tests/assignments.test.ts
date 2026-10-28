@@ -5,6 +5,7 @@ import {
   findAssignment,
   listAssignments,
   setAssignmentCourse,
+  setAssignmentKind,
 } from '../src/web/features/assignments/assignment-api.js';
 import { createCourse } from '../src/web/features/courses/course-api.js';
 import { account, stack } from './support/supabase.js';
@@ -25,6 +26,7 @@ test(
       id: task.id,
       title: 'Read ch. 4',
       courseId: null,
+      kind: 'assignment',
     });
     assert.equal(await findAssignment(other, task.id), null);
   },
@@ -78,5 +80,41 @@ test(
       /Course not found/,
     );
     assert.equal((await findAssignment(student, task.id))?.courseId, null);
+  },
+);
+
+test(
+  'AT-04: a task keeps its type, and changing it keeps everything else',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const other = await account();
+    const math = await createCourse(student, { name: 'Math' });
+
+    for (const kind of ['assignment', 'exam', 'quiz', 'project'] as const) {
+      const task = await createAssignment(student, { title: kind, kind });
+      assert.equal((await findAssignment(student, task.id))?.kind, kind);
+    }
+    const untyped = await createAssignment(student, { title: 'Reading' });
+    assert.equal(untyped.kind, 'assignment');
+
+    const midterm = await createAssignment(student, {
+      title: 'Midterm',
+      courseId: math.id,
+      kind: 'quiz',
+    });
+    await setAssignmentKind(student, midterm.id, 'exam');
+    assert.deepEqual(await findAssignment(student, midterm.id), {
+      id: midterm.id,
+      title: 'Midterm',
+      courseId: math.id,
+      kind: 'exam',
+    });
+
+    await assert.rejects(
+      setAssignmentKind(other, midterm.id, 'project'),
+      /Assignment not found/,
+    );
+    assert.equal((await findAssignment(student, midterm.id))?.kind, 'exam');
   },
 );
