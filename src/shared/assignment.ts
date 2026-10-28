@@ -19,4 +19,6 @@ export interface Assignment {
   dueDate: string | null;
   /** Local wall time in HH:MM, or null for a date-only deadline. */
   dueTime: string | null;
+  /** When the task was marked completed, or null while it is open. */
+  completedAt: string | null;
 }

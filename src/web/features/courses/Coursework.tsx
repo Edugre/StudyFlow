@@ -150,6 +150,12 @@ export function Coursework({
                 <li key={assignment.id}>
                   {assignment.title}{' '}
                   <span className="tag">{optionLabel(assignment.kind)}</span>
+                  {assignment.completedAt && (
+                    <>
+                      {' '}
+                      <span className="tag">Completed</span>
+                    </>
+                  )}
                   {courseSelect(`Course for ${assignment.title}`, (id) =>
                     moveAssignment(assignment.id, id),
                   )}

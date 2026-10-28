@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  completeAssignment,
   createAssignment,
   findAssignment,
   listAssignments,
@@ -32,6 +33,7 @@ test(
       priority: 'medium',
       dueDate: null,
       dueTime: null,
+      completedAt: null,
     });
     assert.equal(await findAssignment(other, task.id), null);
   },
@@ -117,6 +119,7 @@ test(
       priority: 'medium',
       dueDate: null,
       dueTime: null,
+      completedAt: null,
     });
 
     await assert.rejects(
@@ -216,5 +219,41 @@ test(
       (await findAssignment(student, reading.id))?.dueDate,
       '2026-11-03',
     );
+  },
+);
+
+test(
+  'AT-06: a completed task stays completed and is counted once',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const other = await account();
+    const essay = await createAssignment(student, { title: 'Essay' });
+    const lab = await createAssignment(student, { title: 'Lab' });
+    assert.equal(essay.completedAt, null);
+
+    const done = await completeAssignment(student, essay.id);
+    assert.notEqual(done.completedAt, null);
+    assert.equal(
+      (await findAssignment(student, essay.id))?.completedAt,
+      done.completedAt,
+    );
+
+    // Completing again keeps the first completion and adds no task.
+    const again = await completeAssignment(student, essay.id);
+    assert.equal(again.completedAt, done.completedAt);
+    const tasks = await listAssignments(student);
+    assert.equal(tasks.length, 2);
+    assert.deepEqual(
+      tasks.filter((task) => task.completedAt).map((task) => task.id),
+      [essay.id],
+    );
+    assert.equal((await findAssignment(student, lab.id))?.completedAt, null);
+
+    await assert.rejects(
+      completeAssignment(other, lab.id),
+      /Assignment not found/,
+    );
+    assert.equal((await findAssignment(student, lab.id))?.completedAt, null);
   },
 );
