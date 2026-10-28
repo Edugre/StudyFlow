@@ -13,6 +13,10 @@ header {
   background: white;
   border-bottom: 1px solid #d9e0e4;
 }
+nav {
+  display: flex;
+  gap: 1rem;
+}
 main {
   max-width: 56rem;
   margin: 4rem auto;
