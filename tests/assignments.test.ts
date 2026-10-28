@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   completeAssignment,
   createAssignment,
+  editAssignment,
   findAssignment,
   listAssignments,
   setAssignmentCourse,
@@ -255,5 +256,69 @@ test(
       /Assignment not found/,
     );
     assert.equal((await findAssignment(student, lab.id))?.completedAt, null);
+  },
+);
+
+test(
+  'AT-07: editing saves every detail at once, or nothing if any is invalid',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const other = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const physics = await createCourse(student, { name: 'Physics' });
+    const essay = await createAssignment(student, {
+      title: 'Essay',
+      courseId: math.id,
+      dueDate: '2026-11-02',
+    });
+    const lab = await createAssignment(student, { title: 'Lab' });
+    const labBefore = await findAssignment(student, lab.id);
+
+    const changes = {
+      title: '  Final essay  ',
+      courseId: physics.id,
+      kind: 'project',
+      priority: 'high',
+      dueDate: '2026-12-01',
+      dueTime: '23:59',
+    };
+    await editAssignment(student, essay.id, changes);
+    const edited = {
+      id: essay.id,
+      title: 'Final essay',
+      courseId: physics.id,
+      kind: 'project',
+      priority: 'high',
+      dueDate: '2026-12-01',
+      dueTime: '23:59',
+      completedAt: null,
+    };
+    assert.deepEqual(await findAssignment(student, essay.id), edited);
+    assert.deepEqual(await findAssignment(student, lab.id), labBefore);
+
+    // One invalid field rejects the whole edit, valid fields included.
+    await assert.rejects(
+      editAssignment(student, essay.id, {
+        ...changes,
+        title: 'Renamed',
+        dueTime: '25:00',
+      }),
+      /valid due date/,
+    );
+    assert.deepEqual(await findAssignment(student, essay.id), edited);
+
+    // Editing a completed task keeps its completion.
+    const done = await completeAssignment(student, essay.id);
+    await editAssignment(student, essay.id, { ...changes, title: 'Essay v2' });
+    const kept = await findAssignment(student, essay.id);
+    assert.equal(kept?.title, 'Essay v2');
+    assert.equal(kept?.completedAt, done.completedAt);
+
+    await assert.rejects(
+      editAssignment(other, lab.id, { title: 'Hijacked' }),
+      /Assignment not found/,
+    );
+    assert.deepEqual(await findAssignment(student, lab.id), labBefore);
   },
 );

@@ -9,6 +9,7 @@ import {
 } from '../src/web/features/courses/course-api.js';
 import {
   createAssignment,
+  editAssignment,
   setAssignmentDue,
   setAssignmentKind,
   setAssignmentPriority,
@@ -123,6 +124,23 @@ test('coursework input is validated before reaching Supabase', async () => {
       /valid due date/,
     );
   }
+  const edit = {
+    title: 'Essay',
+    kind: 'exam',
+    priority: 'high',
+    dueDate: '2026-11-02',
+  };
+  for (const [invalid, message] of [
+    [{ title: ' ' }, /title/],
+    [{ kind: 'homework' }, /Choose assignment/],
+    [{ priority: 'urgent' }, /Choose Low/],
+    [{ dueDate: '2026-02-30' }, /valid due date/],
+    [{ courseId: 'not-a-uuid' }, /Course not found/],
+  ] as const)
+    await assert.rejects(
+      editAssignment(offline, crypto.randomUUID(), { ...edit, ...invalid }),
+      message,
+    );
   const valid = { date: '2026-11-02', startTime: '18:00', durationMinutes: 60 };
   for (const invalid of [
     {},

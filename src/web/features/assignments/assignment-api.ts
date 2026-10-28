@@ -193,3 +193,22 @@ export async function completeAssignment(client: SupabaseClient, id: string) {
     completed_at: new Date().toISOString(),
   });
 }
+
+/**
+ * AT-07: saves every editable detail of a task in one update. The input holds
+ * the whole edit form; if any field is invalid, nothing is saved.
+ * Completion (AT-06) is not editable here.
+ */
+export async function editAssignment(
+  client: SupabaseClient,
+  id: string,
+  input: Record<string, unknown>,
+) {
+  return updateAssignment(client, id, {
+    title: title(input.title),
+    course_id: courseLink(input.courseId),
+    kind: kind(input.kind),
+    priority: priority(input.priority),
+    ...deadline(input.dueDate, input.dueTime),
+  });
+}

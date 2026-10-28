@@ -11,12 +11,9 @@ import { listCourses, type SavedCourse } from '../courses/course-api.js';
 import {
   completeAssignment,
   createAssignment,
+  editAssignment,
   findAssignment,
   listAssignments,
-  setAssignmentCourse,
-  setAssignmentDue,
-  setAssignmentKind,
-  setAssignmentPriority,
 } from './assignment-api.js';
 
 const kindOptions = taskKinds.map((kind) => (
@@ -50,11 +47,13 @@ export function TasksPage() {
  * AT-05: each task has a Low, Medium, or High priority.
  * AT-03: each task can have a due date with an optional time.
  * AT-06: a task can be marked completed, once.
+ * AT-07: every editable detail can be changed in one form, or cancelled.
  */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
   const [courses, setCourses] = useState<SavedCourse[]>([]);
   const [selected, setSelected] = useState<Assignment | null>(null);
+  const [editing, setEditing] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -107,6 +106,7 @@ function TaskList() {
       });
       setTasks((previous) => [...previous, saved]);
       opening.current = null;
+      setEditing(false);
       setSelected(saved);
       form.reset();
       return 'Task saved.';
@@ -125,13 +125,15 @@ function TaskList() {
     });
   }
 
-  function saveDue(event: FormEvent<HTMLFormElement>, id: string) {
+  // Cancel just closes the form; nothing is sent, so saved values stay.
+  function saveEdit(event: FormEvent<HTMLFormElement>, id: string) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    saveTask(
-      () => setAssignmentDue(supabase, id, values),
-      values.dueDate ? 'Due date saved.' : 'Due date cleared.',
-    );
+    saveTask(async () => {
+      const saved = await editAssignment(supabase, id, values);
+      setEditing(false);
+      return saved;
+    }, 'Task saved.');
   }
 
   const courseName = (task: Assignment) =>
@@ -150,6 +152,7 @@ function TaskList() {
 
   async function reopen(id: string) {
     opening.current = id;
+    setEditing(false);
     setError('');
     setSelected(null);
     try {
@@ -270,94 +273,75 @@ function TaskList() {
               {busy ? 'Saving…' : 'Mark completed'}
             </button>
           )}
-          <label>
-            Change type
-            <select
-              value={selected.kind}
-              disabled={busy}
-              onChange={(event) =>
-                saveTask(
-                  () =>
-                    setAssignmentKind(
-                      supabase,
-                      selected.id,
-                      event.target.value,
-                    ),
-                  'Type saved.',
-                )
-              }
+          {editing ? (
+            <form
+              onSubmit={(event) => saveEdit(event, selected.id)}
+              aria-label="Edit task"
             >
-              {kindOptions}
-            </select>
-          </label>
-          <label>
-            Change priority
-            <select
-              value={selected.priority}
+              <h3>Edit task</h3>
+              <label>
+                Title
+                <input
+                  name="title"
+                  required
+                  maxLength={200}
+                  defaultValue={selected.title}
+                />
+              </label>
+              <label>
+                Type
+                <select name="kind" defaultValue={selected.kind}>
+                  {kindOptions}
+                </select>
+              </label>
+              <label>
+                Priority
+                <select name="priority" defaultValue={selected.priority}>
+                  {priorityOptions}
+                </select>
+              </label>
+              <label>
+                Due date (optional)
+                <input
+                  name="dueDate"
+                  type="date"
+                  defaultValue={selected.dueDate ?? ''}
+                />
+              </label>
+              <label>
+                Due time (optional)
+                <input
+                  name="dueTime"
+                  type="time"
+                  defaultValue={selected.dueTime ?? ''}
+                />
+              </label>
+              <label>
+                Course (optional)
+                <select name="courseId" defaultValue={selected.courseId ?? ''}>
+                  {courseOptions}
+                </select>
+              </label>
+              <button disabled={busy}>
+                {busy ? 'Saving…' : 'Save changes'}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <button
+              type="button"
               disabled={busy}
-              onChange={(event) =>
-                saveTask(
-                  () =>
-                    setAssignmentPriority(
-                      supabase,
-                      selected.id,
-                      event.target.value,
-                    ),
-                  'Priority saved.',
-                )
-              }
+              onClick={() => setEditing(true)}
             >
-              {priorityOptions}
-            </select>
-          </label>
-          <form
-            onSubmit={(event) => saveDue(event, selected.id)}
-            key={`${selected.id}:${selected.dueDate}:${selected.dueTime}`}
-          >
-            <label>
-              Due date
-              <input
-                name="dueDate"
-                type="date"
-                defaultValue={selected.dueDate ?? ''}
-              />
-            </label>
-            <label>
-              Due time (optional)
-              <input
-                name="dueTime"
-                type="time"
-                defaultValue={selected.dueTime ?? ''}
-              />
-            </label>
-            <p>Leave both blank to remove the due date.</p>
-            <button disabled={busy}>
-              {busy ? 'Saving…' : 'Save due date'}
+              Edit task
             </button>
-            <button type="reset" disabled={busy}>
-              Cancel
-            </button>
-          </form>
-          <label>
-            Change course
-            <select
-              value={selected.courseId ?? ''}
-              disabled={busy}
-              onChange={(event) =>
-                saveTask(
-                  () =>
-                    setAssignmentCourse(
-                      supabase,
-                      selected.id,
-                      event.target.value || null,
-                    ),
-                  'Course saved.',
-                )
-              }
-            >
-              {courseOptions}
-            </select>
-          </label>
+          )}
         </section>
       )}
     </>
