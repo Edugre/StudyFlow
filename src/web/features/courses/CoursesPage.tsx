@@ -1,4 +1,5 @@
 import { CourseDetails } from './CourseDetails.js';
+import { Coursework } from './Coursework.js';
 import { MeetingsEditor } from './MeetingsEditor.js';
 import type { CourseMeeting } from '../../../shared/course.js';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -176,7 +177,7 @@ export function CoursesPage() {
   async function deleteCourse() {
     if (!selected) return;
     const confirmed = window.confirm(
-      `Delete ${selected.name}? This action cannot be undone.`,
+      `Delete ${selected.name}? This action cannot be undone. Its assignments and study sessions are kept without a course.`,
     );
     if (!confirmed) return;
     setBusy(true);
@@ -429,6 +430,11 @@ export function CoursesPage() {
             <section aria-label="Selected course">
               <h2>{selected.name}</h2>
               <CourseDetails course={selected} />
+              <Coursework
+                key={selected.id}
+                course={selected}
+                courses={courses}
+              />
 
               <button type="button" onClick={deleteCourse} disabled={busy}>
                 {busy ? 'Deleting…' : 'Delete course'}

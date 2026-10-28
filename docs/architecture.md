@@ -31,8 +31,19 @@ on Vercel that uses `supabase-js` directly against Supabase Postgres and Auth.
 - **Data:** the old SQLite data was local-only and its scrypt hashes cannot be
   imported into Supabase Auth; nothing was migrated.
 - **Future work:** reminders (RN) can use `pg_cron` + Edge Functions or Vercel
-  Cron; new feature tables follow the same RLS pattern; CM-10 needs an explicit
-  `on delete` policy for links to courses.
+  Cron; new feature tables follow the same RLS pattern.
+
+# Coursework links survive course deletion (CM-10)
+
+Recorded 2026-10-30. Status: implemented, pending team review.
+
+`assignments` and `study_sessions` (minimal AT-01/SP-01) have an optional
+`course_id` with `on delete set null`: deleting a course keeps its coursework,
+unlinked, rather than silently destroying it. The CM-07 confirmation says so.
+A foreign key alone would accept another student's course id, so each table's
+RLS `with check` also requires the linked course to belong to the student.
+Rejected: `on delete cascade` (loses work and grades later) and `restrict`
+(blocks CM-07 until every item is moved by hand).
 
 # Current semester is student-chosen (CM-08)
 

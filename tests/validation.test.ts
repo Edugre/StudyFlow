@@ -7,6 +7,11 @@ import {
   updateCourse,
   updateCourseField,
 } from '../src/web/features/courses/course-api.js';
+import { createAssignment } from '../src/web/features/assignments/assignment-api.js';
+import {
+  createStudySession,
+  setStudySessionCourse,
+} from '../src/web/features/study-sessions/session-api.js';
 import { setCurrentSemester } from '../src/web/features/courses/settings-api.js';
 import { validMeetings } from '../src/shared/meetings.js';
 
@@ -69,4 +74,40 @@ test('current semester input is validated before reaching Supabase', async () =>
     /at most 100 characters/,
   );
   await assert.rejects(setCurrentSemester(offline, 42), /must be text/);
+});
+
+test('coursework input is validated before reaching Supabase', async () => {
+  await assert.rejects(createAssignment(offline, { title: ' ' }), /title/);
+  await assert.rejects(
+    createAssignment(offline, { title: 'x'.repeat(201) }),
+    /title/,
+  );
+  await assert.rejects(
+    createAssignment(offline, { title: 'Essay', courseId: 'not-a-uuid' }),
+    /Course not found/,
+  );
+  const valid = { date: '2026-11-02', startTime: '18:00', durationMinutes: 60 };
+  for (const invalid of [
+    {},
+    { ...valid, date: undefined },
+    { ...valid, date: '2026-02-30' },
+    { ...valid, date: '2026-13-01' },
+    { ...valid, date: '11/02/2026' },
+    { ...valid, startTime: '24:00' },
+    { ...valid, startTime: '9:00' },
+    { ...valid, durationMinutes: 0 },
+    { ...valid, durationMinutes: -15 },
+    { ...valid, durationMinutes: 1.5 },
+    { ...valid, durationMinutes: 1441 },
+    { ...valid, durationMinutes: '60' },
+  ])
+    await assert.rejects(
+      createStudySession(offline, invalid),
+      /valid date/,
+      JSON.stringify(invalid),
+    );
+  await assert.rejects(
+    setStudySessionCourse(offline, 'not-a-uuid', null),
+    /Study session not found/,
+  );
 });
