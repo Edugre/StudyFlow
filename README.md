@@ -37,7 +37,9 @@ The app has `/` and `/courses`. Students can register, sign in/out, add a named
 course with optional code, instructor, semester and meetings, filter by
 semester, reopen to view full details (CM-09), edit (CM-02–06) and delete
 (CM-07) courses, and choose a current semester that the course list opens
-on (CM-08).
+on (CM-08). From a course's details they can add assignments and study
+sessions linked to it and move them between courses (CM-10, with minimal
+AT-01/SP-01). Deleting a course keeps its coursework, unlinked.
 
 See [authentication and course management](docs/authentication.md) for auth,
 security choices and the database contract.
@@ -113,7 +115,7 @@ tests against a local Supabase stack, then builds.
 
 ## Current implementation plan
 
-CM-01–CM-05 and [SYS-01 authentication](https://trello.com/c/iDS4ur3t/51-sys-01-student-authentication-and-account-isolation) are in **Review**. Trello's **This Week** list now contains CM-06–CM-10. The course task map is:
+CM-01–CM-07 and [SYS-01 authentication](https://trello.com/c/iDS4ur3t/51-sys-01-student-authentication-and-account-isolation) are in **Review**. CM-08–CM-10 are implemented on stacked branches (`cm-09-course-details` → `cm-08-current-courses` → `cm-10-course-links`) pending review. The course task map is:
 
 | Code  | Task                               | Trello dependencies                                           |
 | ----- | ---------------------------------- | ------------------------------------------------------------- |
@@ -137,6 +139,6 @@ See [implementation map and handoff](docs/implementation-plan.md) for card links
 all dependencies, future module mapping, acceptance-test guidance, and gaps.
 The Google Doc's five-sprint plan is proposed, not a dated delivery commitment.
 
-Before feature implementation, discuss CM-10 scheduling, semester
-representation, timezone handling and course deletion with linked records.
-Semesters remain free-text labels pending team review.
+Semesters remain free-text labels with a student-chosen current semester, and
+deleting a course unlinks its coursework (see [architecture](docs/architecture.md)).
+Timezone handling for meetings and study sessions still needs a team decision.
