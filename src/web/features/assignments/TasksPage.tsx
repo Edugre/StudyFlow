@@ -13,6 +13,7 @@ import {
   findAssignment,
   listAssignments,
   setAssignmentCourse,
+  setAssignmentDue,
   setAssignmentKind,
   setAssignmentPriority,
 } from './assignment-api.js';
@@ -28,6 +29,10 @@ const priorityOptions = priorities.map((priority) => (
   </option>
 ));
 
+/** "2026-11-02 18:00", or just the date for a date-only deadline. */
+const dueText = (task: Assignment) =>
+  task.dueTime ? `${task.dueDate} ${task.dueTime}` : task.dueDate;
+
 export function TasksPage() {
   return (
     <>
@@ -42,6 +47,7 @@ export function TasksPage() {
  * AT-02: each task can be linked to one of the student's courses.
  * AT-04: each task is an assignment, exam, quiz, or project.
  * AT-05: each task has a Low, Medium, or High priority.
+ * AT-03: each task can have a due date with an optional time.
  */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
@@ -94,6 +100,8 @@ function TaskList() {
         courseId: values.courseId,
         kind: values.kind,
         priority: values.priority,
+        dueDate: values.dueDate,
+        dueTime: values.dueTime,
       });
       setTasks((previous) => [...previous, saved]);
       opening.current = null;
@@ -113,6 +121,15 @@ function TaskList() {
       setSelected(saved);
       return done;
     });
+  }
+
+  function saveDue(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    saveTask(
+      () => setAssignmentDue(supabase, id, values),
+      values.dueDate ? 'Due date saved.' : 'Due date cleared.',
+    );
   }
 
   const courseName = (task: Assignment) =>
@@ -167,6 +184,14 @@ function TaskList() {
           </select>
         </label>
         <label>
+          Due date (optional)
+          <input name="dueDate" type="date" />
+        </label>
+        <label>
+          Due time (optional)
+          <input name="dueTime" type="time" />
+        </label>
+        <label>
           Course (optional)
           <select name="courseId" defaultValue="">
             {courseOptions}
@@ -187,6 +212,7 @@ function TaskList() {
               <span className="tag">{optionLabel(task.kind)}</span>{' '}
               <span className="tag">{optionLabel(task.priority)} priority</span>
               {courseName(task) && ` — ${courseName(task)}`}
+              {task.dueDate && ` — due ${dueText(task)}`}
             </li>
           ))}
         </ul>
@@ -204,6 +230,10 @@ function TaskList() {
             <div>
               <dt>Priority</dt>
               <dd>{optionLabel(selected.priority)}</dd>
+            </div>
+            <div>
+              <dt>Due</dt>
+              <dd>{selected.dueDate ? dueText(selected) : 'No due date'}</dd>
             </div>
             <div>
               <dt>Course</dt>
@@ -250,6 +280,34 @@ function TaskList() {
               {priorityOptions}
             </select>
           </label>
+          <form
+            onSubmit={(event) => saveDue(event, selected.id)}
+            key={`${selected.id}:${selected.dueDate}:${selected.dueTime}`}
+          >
+            <label>
+              Due date
+              <input
+                name="dueDate"
+                type="date"
+                defaultValue={selected.dueDate ?? ''}
+              />
+            </label>
+            <label>
+              Due time (optional)
+              <input
+                name="dueTime"
+                type="time"
+                defaultValue={selected.dueTime ?? ''}
+              />
+            </label>
+            <p>Leave both blank to remove the due date.</p>
+            <button disabled={busy}>
+              {busy ? 'Saving…' : 'Save due date'}
+            </button>
+            <button type="reset" disabled={busy}>
+              Cancel
+            </button>
+          </form>
           <label>
             Change course
             <select

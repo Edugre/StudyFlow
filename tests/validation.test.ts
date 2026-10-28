@@ -9,6 +9,7 @@ import {
 } from '../src/web/features/courses/course-api.js';
 import {
   createAssignment,
+  setAssignmentDue,
   setAssignmentKind,
   setAssignmentPriority,
 } from '../src/web/features/assignments/assignment-api.js';
@@ -106,6 +107,22 @@ test('coursework input is validated before reaching Supabase', async () => {
     setAssignmentPriority(offline, crypto.randomUUID(), 'urgent'),
     /Choose Low, Medium, or High priority/,
   );
+  for (const due of [
+    { dueDate: '2026-02-30' },
+    { dueDate: '11/02/2026' },
+    { dueDate: '2026-11-02', dueTime: '25:00' },
+    { dueDate: '2026-11-02', dueTime: '6pm' },
+    { dueTime: '18:00' },
+  ]) {
+    await assert.rejects(
+      createAssignment(offline, { title: 'Essay', ...due }),
+      /valid due date/,
+    );
+    await assert.rejects(
+      setAssignmentDue(offline, crypto.randomUUID(), due),
+      /valid due date/,
+    );
+  }
   const valid = { date: '2026-11-02', startTime: '18:00', durationMinutes: 60 };
   for (const invalid of [
     {},

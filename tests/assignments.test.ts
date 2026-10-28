@@ -5,6 +5,7 @@ import {
   findAssignment,
   listAssignments,
   setAssignmentCourse,
+  setAssignmentDue,
   setAssignmentKind,
   setAssignmentPriority,
 } from '../src/web/features/assignments/assignment-api.js';
@@ -29,6 +30,8 @@ test(
       courseId: null,
       kind: 'assignment',
       priority: 'medium',
+      dueDate: null,
+      dueTime: null,
     });
     assert.equal(await findAssignment(other, task.id), null);
   },
@@ -112,6 +115,8 @@ test(
       courseId: math.id,
       kind: 'exam',
       priority: 'medium',
+      dueDate: null,
+      dueTime: null,
     });
 
     await assert.rejects(
@@ -154,5 +159,62 @@ test(
       /Assignment not found/,
     );
     assert.equal((await findAssignment(student, essay.id))?.priority, 'low');
+  },
+);
+
+test(
+  'AT-03: a task keeps its deadline, and invalid deadlines keep the saved one',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const other = await account();
+
+    const essay = await createAssignment(student, {
+      title: 'Essay',
+      dueDate: '2026-11-02',
+      dueTime: '18:00',
+    });
+    const reading = await createAssignment(student, {
+      title: 'Reading',
+      dueDate: '2026-11-03',
+    });
+    const saved = await findAssignment(student, essay.id);
+    assert.equal(saved?.dueDate, '2026-11-02');
+    assert.equal(saved?.dueTime, '18:00');
+    const dateOnly = await findAssignment(student, reading.id);
+    assert.equal(dateOnly?.dueDate, '2026-11-03');
+    assert.equal(dateOnly?.dueTime, null);
+
+    await setAssignmentDue(student, essay.id, {
+      dueDate: '2026-12-01',
+      dueTime: '09:30',
+    });
+    for (const invalid of [
+      { dueDate: '2026-02-30' },
+      { dueDate: '2026-12-01', dueTime: '24:00' },
+      { dueTime: '10:00' },
+    ])
+      await assert.rejects(
+        setAssignmentDue(student, essay.id, invalid),
+        /valid due date/,
+      );
+    const kept = await findAssignment(student, essay.id);
+    assert.equal(kept?.dueDate, '2026-12-01');
+    assert.equal(kept?.dueTime, '09:30');
+    assert.equal(kept?.title, 'Essay');
+
+    await setAssignmentDue(student, essay.id, { dueDate: '', dueTime: '' });
+    const cleared = await findAssignment(student, essay.id);
+    assert.equal(cleared?.dueDate, null);
+    assert.equal(cleared?.dueTime, null);
+
+    await assert.rejects(
+      setAssignmentDue(other, reading.id, { dueDate: '2027-01-01' }),
+      /Assignment not found/,
+    );
+    assert.equal(
+      (await findAssignment(student, reading.id))?.dueDate,
+      '2026-11-03',
+    );
   },
 );

@@ -52,6 +52,8 @@ test(
       courseId: math.id,
       kind: 'assignment',
       priority: 'medium',
+      dueDate: null,
+      dueTime: null,
     });
     assert.deepEqual(await findStudySession(student, review.id), {
       id: review.id,

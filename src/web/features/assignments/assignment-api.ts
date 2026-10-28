@@ -6,11 +6,12 @@ import {
   type Priority,
   type TaskKind,
 } from '../../../shared/assignment.js';
+import { isDate, isTime } from '../../../shared/dates.js';
 import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 
 /**
  * Assignment data access (AT-01) with course links (CM-10, AT-02) and
- * task types (AT-04) and priorities (AT-05). Ownership is enforced by row level security.
+ * task types (AT-04), priorities (AT-05) and deadlines (AT-03). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
@@ -18,14 +19,18 @@ type Row = {
   course_id: string | null;
   kind: TaskKind;
   priority: Priority;
+  due_on: string | null;
+  due_time: string | null;
 };
-const columns = 'id, title, course_id, kind, priority';
+const columns = 'id, title, course_id, kind, priority, due_on, due_time';
 const toAssignment = (row: Row): Assignment => ({
   id: row.id,
   title: row.title,
   courseId: row.course_id,
   kind: row.kind,
   priority: row.priority,
+  dueDate: row.due_on,
+  dueTime: row.due_time?.slice(0, 5) ?? null,
 });
 function fail(error: PostgrestError): never {
   failLinked(error, 'assignment details');
@@ -51,6 +56,26 @@ function priority(value: unknown = 'medium') {
   return value as Priority;
 }
 
+export const deadlineError =
+  'Enter a valid due date, and a due time (HH:MM) only together with a date.';
+
+/** An optional due date with an optional time; blank values mean none. */
+function deadline(dueDate: unknown, dueTime: unknown) {
+  const blank = (value: unknown) =>
+    value === undefined || value === null || value === '';
+  const due_on = blank(dueDate) ? null : dueDate;
+  const due_time = blank(dueTime) ? null : dueTime;
+  if (
+    (due_on !== null && !isDate(due_on)) ||
+    (due_time !== null && (!isTime(due_time) || due_on === null))
+  )
+    throw new Error(deadlineError);
+  return { due_on, due_time } as {
+    due_on: string | null;
+    due_time: string | null;
+  };
+}
+
 // Arguments are validated before touching the client so bad input never leaves the browser.
 export async function createAssignment(
   client: SupabaseClient,
@@ -61,6 +86,7 @@ export async function createAssignment(
     course_id: courseLink(input.courseId),
     kind: kind(input.kind),
     priority: priority(input.priority),
+    ...deadline(input.dueDate, input.dueTime),
   };
   const { data, error } = await client
     .from('assignments')
@@ -140,4 +166,16 @@ export async function setAssignmentPriority(
   value: unknown,
 ) {
   return updateAssignment(client, id, { priority: priority(value) });
+}
+
+/**
+ * Sets or clears the task's deadline. Invalid input is rejected before the
+ * request, so the previously saved deadline stays.
+ */
+export async function setAssignmentDue(
+  client: SupabaseClient,
+  id: string,
+  input: Record<string, unknown>,
+) {
+  return updateAssignment(client, id, deadline(input.dueDate, input.dueTime));
 }

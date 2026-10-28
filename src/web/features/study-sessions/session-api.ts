@@ -1,4 +1,5 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
+import { isDate, isTime } from '../../../shared/dates.js';
 import type { StudySession } from '../../../shared/study-session.js';
 import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 
@@ -30,17 +31,9 @@ export const sessionError =
 
 function schedule(input: Record<string, unknown>) {
   const { date, startTime, durationMinutes } = input;
-  // Round-tripping through Date rejects impossible dates such as 2026-02-30.
-  const parsed = new Date(`${date}T00:00:00Z`);
-  const validDate =
-    typeof date === 'string' &&
-    /^\d{4}-\d{2}-\d{2}$/.test(date) &&
-    !Number.isNaN(parsed.getTime()) &&
-    parsed.toISOString().startsWith(date);
   if (
-    !validDate ||
-    typeof startTime !== 'string' ||
-    !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(startTime) ||
+    !isDate(date) ||
+    !isTime(startTime) ||
     !Number.isInteger(durationMinutes) ||
     (durationMinutes as number) < 1 ||
     (durationMinutes as number) > 1440
