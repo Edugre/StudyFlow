@@ -15,4 +15,8 @@ export interface Assignment {
   courseId: string | null;
   kind: TaskKind;
   priority: Priority;
+  /** Local calendar date, YYYY-MM-DD, or null when the task has no deadline. */
+  dueDate: string | null;
+  /** Local wall time in HH:MM, or null for a date-only deadline. */
+  dueTime: string | null;
 }

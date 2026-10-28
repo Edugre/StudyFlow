@@ -1,6 +1,6 @@
 import type { CourseMeeting } from './course.js';
+import { isTime } from './dates.js';
 const days = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
-const time = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 export function validMeetings(value: unknown): value is CourseMeeting[] {
   return (
     Array.isArray(value) &&
@@ -10,10 +10,8 @@ export function validMeetings(value: unknown): value is CourseMeeting[] {
         meeting &&
         typeof meeting === 'object' &&
         days.has(meeting.day) &&
-        typeof meeting.startTime === 'string' &&
-        typeof meeting.endTime === 'string' &&
-        time.test(meeting.startTime) &&
-        time.test(meeting.endTime) &&
+        isTime(meeting.startTime) &&
+        isTime(meeting.endTime) &&
         meeting.endTime > meeting.startTime,
     )
   );
