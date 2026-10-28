@@ -14,74 +14,101 @@ the initial scope.
 Both were read on 2026-10-01; implementation status was synchronized on 2026-10-02. Treat the local plan as a snapshot;
 check these sources before feature work. No team-approved stack was found.
 
-## Architecture and scaffold status
+## Architecture
 
-One TypeScript application: React/Vite frontend, Express API, SQLite persistence.
-This provides simple feature boundaries and one dependency installation for the
-six-person team. See [architecture decision](docs/architecture.md) for rationale,
-provisional choices and limitations.
+A React/Vite single-page app hosted on **Vercel**, talking directly to
+**Supabase** (Postgres + Auth) through `@supabase/supabase-js`. There is no
+custom API server: row level security (RLS) in Postgres enforces that students
+only ever see and change their own records. See
+[architecture decision](docs/architecture.md) for rationale and trade-offs.
 
-| Path                   | Purpose                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------- |
-| `src/web`              | App shell, routing and styles; course UI boundary in `features/courses`         |
-| `src/server`           | API startup and health route; course repository interface in `features/courses` |
-| `src/server/db`        | Transactional version-1 database initialization                                 |
-| `src/shared/course.ts` | Course and meeting types shared across UI/API                                   |
-| `tests`                | API and persistence scaffold checks                                             |
-| `docs`                 | Architecture, task dependencies and team questions                              |
+| Path                                     | Purpose                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------- |
+| `src/web`                                | App shell, routing, styles; course UI in `features/courses`         |
+| `src/web/lib/supabase.ts`                | Supabase client (publishable key only)                              |
+| `src/web/features/courses/course-api.ts` | Course data access: validation, RPC calls, row mapping              |
+| `src/shared`                             | Course types and meeting validation shared by UI and tests          |
+| `supabase/migrations`                    | Schema, RLS policies and RPC functions (source of truth for the DB) |
+| `supabase/tests`                         | pgTAP tests for constraints, RLS and privileges                     |
+| `tests`                                  | Node tests: offline validation + integration against local Supabase |
+| `docs`                                   | Architecture, authentication, task dependencies                     |
 
-The app has `/` and `/courses`, plus `/api/health`. Students can register,
-sign in/out, add a named course with optional code, instructor and semester, filter saved courses by semester, reopen one, and edit its code, instructor, semester or meeting schedule. Records
-are private to the signed-in student and persist in SQLite. This implements
-CM-01's minimal list/reopen behavior and CM-02–05's individual fields. The current-semester view and full course details remain CM-08/09 work. General editing and deletion are not implemented.
+The app has `/` and `/courses`. Students can register, sign in/out, add a named
+course with optional code, instructor, semester and meetings, filter by
+semester, reopen, edit (CM-02–06) and delete (CM-07) courses. The
+current-semester view and full course details remain CM-08/09 work.
 
-See [authentication and CM-01](docs/authentication.md) for API details, security
-choices, migration behavior and limits.
+See [authentication and course management](docs/authentication.md) for auth,
+security choices and the database contract.
 
 ## Local development
 
-Use Node **22.16 or later** and npm. With nvm, `nvm install && nvm use` selects
-the tested version. From the repository root:
+Requires Node **22.16+**, npm and the
+[Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
+(for migrations). Docker is only needed for the optional local Supabase stack.
 
 ```sh
 npm ci
-npm run dev
+cp .env.example .env.local  # fill in the project URL and publishable key
+npm run dev                 # http://127.0.0.1:5173
 ```
 
-Open http://127.0.0.1:5173. The API listens on http://127.0.0.1:3001; Vite proxies
-`/api` there. Stop both processes with Ctrl+C. Dependencies are locked in
-`package-lock.json`. Node 22 prints an experimental warning for built-in SQLite.
+By default `.env.local` points at the hosted Supabase project. To work against
+a disposable local database instead (requires Docker), run `npm run db:start`
+and use the URL and key from `npx supabase status`.
+
+Local auth does not require email confirmation; confirmation emails (if
+enabled) are viewable in Mailpit at http://127.0.0.1:54324.
 
 ```sh
 npm run typecheck
 npm run lint
-npm test
+npm test             # integration tests: run only against a local stack, never the hosted project
+npm run db:test      # pgTAP tests (supabase test db)
+npm run db:reset     # rebuild the local DB from migrations
 npm run format:check
-npm run build
-npm start
+npm run build        # outputs dist/
 ```
 
-After building, `npm start` serves the compiled API and frontend together at
-http://127.0.0.1:3001, including direct navigation to `/courses`. This is a local
-production smoke setup; hosting and production authentication are still open.
-`npm run format` applies Prettier. Feature tests should live beside other tests
-in `tests/*.test.ts`; the current checks cover scaffolding only.
+### Database changes
+
+Never edit an applied migration. Create a new one with
+`npx supabase migration new <name>`, apply locally with `npm run db:reset`, add
+pgTAP coverage for any new table's RLS, and regenerate types if you add them
+(`npx supabase gen types typescript --local`). Every new table must enable RLS
+with owner-scoped policies.
 
 ## Environment
 
-No environment variables or secrets are required for this scaffold. Optionally
-copy `.env.example` to `.env`; Node loads it for API dev/start commands.
+| Variable                        | Purpose                                     |
+| ------------------------------- | ------------------------------------------- |
+| `VITE_SUPABASE_URL`             | Supabase project API URL                    |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable (anon) key; safe in the browser |
 
-| Variable        | Default                   | Purpose                                  |
-| --------------- | ------------------------- | ---------------------------------------- |
-| `HOST`          | `127.0.0.1`               | API bind address                         |
-| `PORT`          | `3001`                    | API port                                 |
-| `DATABASE_PATH` | `./data/studyflow.sqlite` | SQLite file, relative to repository root |
+`VITE_` variables are embedded in the built JavaScript. Never put the
+service-role key or any other secret in them. `.env.local` is gitignored.
 
-The Vite proxy currently targets port 3001; update `vite.config.ts` if changing
-the API address. Local database files, `.env`, build output and dependencies are
-ignored. Never put secrets in frontend code. Set `NODE_ENV=production` when serving over HTTPS to enable Secure session cookies.
-Local HTTP development leaves this unset.
+## Deployment (Vercel + Supabase)
+
+One Supabase project (`jzruyssywoevtrjoumkr`) serves both Vercel Production and
+Preview deployments and local development. There is no separate staging
+database, so anything created while developing locally is real data in that
+project. One-time setup:
+
+1. In the Supabase dashboard: Authentication → Sign In / Providers → Email:
+   minimum password length 12, **Confirm email** on. Authentication → URL
+   Configuration: Site URL = the Vercel production domain; add
+   `http://127.0.0.1:5173` and the Vercel preview pattern
+   (`https://*-<team>.vercel.app/**`) to the redirect URLs.
+2. Apply migrations: `supabase link --project-ref jzruyssywoevtrjoumkr` then
+   `supabase db push` (no Docker needed).
+3. Import the GitHub repo into Vercel (framework preset: Vite; `vercel.json`
+   sets build/output and the SPA rewrite). Set `VITE_SUPABASE_URL` and
+   `VITE_SUPABASE_PUBLISHABLE_KEY` for all environments.
+4. After each migration, check Supabase Advisors (security + performance).
+
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, pgTAP and integration
+tests against a local Supabase stack, then builds.
 
 ## Current implementation plan
 
@@ -109,7 +136,6 @@ See [implementation map and handoff](docs/implementation-plan.md) for card links
 all dependencies, future module mapping, acceptance-test guidance, and gaps.
 The Google Doc's five-sprint plan is proposed, not a dated delivery commitment.
 
-Before feature implementation, discuss the scaffold stack, auth design review,
-CM-10 scheduling, semester representation, timezone handling and course deletion
-with linked records. This session assumes SQLite for local development and text
-semester identifiers; those choices remain subject to team review.
+Before feature implementation, discuss CM-10 scheduling, semester
+representation, timezone handling and course deletion with linked records.
+Semesters remain free-text labels pending team review.

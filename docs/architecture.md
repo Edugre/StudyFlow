@@ -1,7 +1,42 @@
 # Architecture decision history
 
-Current implementation: see [authentication and CM-01](authentication.md). The
-initial scaffold decision below is retained as historical context.
+# Vercel + Supabase
+
+Recorded 2026-10-28. Status: implemented on branch `supabase-vercel-migration`,
+pending team review.
+
+The SQLite file and long-running Express server could not be hosted on Vercel
+(ephemeral filesystem, serverless functions). The app is now a static Vite SPA
+on Vercel that uses `supabase-js` directly against Supabase Postgres and Auth.
+
+- **No API server.** Ownership is enforced in Postgres by row level security
+  (`owner_id = auth.uid()`), not by hand-written `WHERE owner_id = ?` clauses.
+  `owner_id` defaults to `auth.uid()` and is not insertable or updatable by
+  clients (column privileges), so it cannot be spoofed.
+- **Validation in two layers.** `course-api.ts` validates for friendly
+  messages; CHECK constraints and RPC functions are the actual enforcement.
+- **Multi-row writes are RPCs.** `create_course`, `update_course` and
+  `replace_course_meetings` are `security invoker` plpgsql functions, so they
+  run under the caller's RLS and are atomic.
+- **Rejected alternative:** Express as a Vercel Function over Supabase
+  Postgres. It would duplicate auth, need connection pooling, and keep
+  ownership checks in application SQL that RLS already provides.
+- **Trade-off:** `supabase-js` stores the session in `localStorage`, not an
+  HttpOnly cookie, so XSS could steal a session. Keep rendering through React
+  (no `dangerouslySetInnerHTML`) and consider a CSP. `@supabase/ssr` with cookie
+  storage is the escape hatch if this becomes unacceptable.
+- **Environments:** a single Supabase project serves production, Vercel
+  previews and local development; a staging database is not warranted for a
+  course project. CI uses a throwaway local stack via the Supabase CLI.
+- **Data:** the old SQLite data was local-only and its scrypt hashes cannot be
+  imported into Supabase Auth; nothing was migrated.
+- **Future work:** reminders (RN) can use `pg_cron` + Edge Functions or Vercel
+  Cron; new feature tables follow the same RLS pattern; CM-10 needs an explicit
+  `on delete` policy for links to courses.
+
+# Previous: authentication on Express + SQLite (2026-10-02)
+
+Superseded by the decision above; see git history for `src/server`.
 
 # Initial architecture decision
 

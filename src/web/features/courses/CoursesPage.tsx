@@ -1,30 +1,41 @@
 import { MeetingsEditor } from './MeetingsEditor.js';
 import type { CourseMeeting } from '../../../shared/course.js';
 import { useEffect, useState, type FormEvent } from 'react';
+import { supabase } from '../../lib/supabase.js';
+import {
+  createCourse,
+  deleteCourse as removeCourse,
+  findCourse,
+  listCourses,
+  replaceMeetings,
+  updateCourse,
+  updateCourseField,
+  type SavedCourse,
+} from './course-api.js';
 
-async function api(path: string, body?: unknown, method?: string) {
-  const response = await fetch(`/api${path}`, {
-    method: method ?? (body === undefined ? 'GET' : 'POST'),
-    headers: { 'Content-Type': 'application/json', 'X-StudyFlow-Request': '1' },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  if (response.status === 204) return null;
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? 'Request failed');
-  return data;
+async function authenticate(mode: string, email: unknown, password: unknown) {
+  if (
+    typeof email !== 'string' ||
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
+    typeof password !== 'string' ||
+    password.length < 12 ||
+    password.length > 128
+  )
+    throw new Error('Enter a valid email and a password of 12–128 characters.');
+  const credentials = { email: email.trim().toLowerCase(), password };
+  if (mode === 'login') {
+    const { data, error } = await supabase.auth.signInWithPassword(credentials);
+    if (error) throw new Error('Email or password is incorrect.');
+    return data.user;
+  }
+  const { data, error } = await supabase.auth.signUp(credentials);
+  if (error) throw new Error('Unable to create account with these details.');
+  // With email confirmation enabled, sign-up returns no session.
+  return data.session ? data.user : null;
 }
-type SavedCourse = {
-  id: string;
-  name: string;
-  code: string | null;
-  instructor: string | null;
-  semester: string | null;
-  location: string | null;
-  notes: string | null;
-  meetings: CourseMeeting[];
-};
 export function CoursesPage() {
-  const [user, setUser] = useState<{ email: string } | null>(null);
+  const [user, setUser] = useState<{ email?: string } | null>(null);
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState('login');
   const [courses, setCourses] = useState<SavedCourse[]>([]);
@@ -45,12 +56,14 @@ export function CoursesPage() {
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
-    api('/auth/me')
-      .then(async (data) => {
-        const saved = data.user ? await api('/courses') : { courses: [] };
+    supabase.auth
+      .getSession()
+      .then(async ({ data }) => {
+        const sessionUser = data.session?.user ?? null;
+        const saved = sessionUser ? await listCourses(supabase) : [];
         if (active) {
-          setUser(data.user);
-          setCourses(saved.courses);
+          setUser(sessionUser);
+          setCourses(saved);
           setReady(true);
         }
       })
@@ -64,6 +77,12 @@ export function CoursesPage() {
       active = false;
     };
   }, []);
+  function replaceCourse(course: SavedCourse) {
+    setSelected(course);
+    setCourses((previous) =>
+      previous.map((item) => (item.id === course.id ? course : item)),
+    );
+  }
   async function saveField(
     event: FormEvent<HTMLFormElement>,
     field: 'code' | 'instructor' | 'semester',
@@ -75,12 +94,10 @@ export function CoursesPage() {
     setError('');
     setMessage('');
     try {
-      const { course } = await api(`/courses/${selected.id}/${field}`, values);
-      setSelected(course);
-      if (field === 'semester') setSemesterFilter('');
-      setCourses((previous) =>
-        previous.map((item) => (item.id === course.id ? course : item)),
+      replaceCourse(
+        await updateCourseField(supabase, selected.id, field, values[field]),
       );
+      if (field === 'semester') setSemesterFilter('');
       setMessage(
         field === 'code'
           ? 'Course code saved.'
@@ -95,48 +112,39 @@ export function CoursesPage() {
     }
   }
   async function saveCourse(event: FormEvent<HTMLFormElement>) {
-  event.preventDefault();
-  if (!selected) return;
-
-  const values = Object.fromEntries(new FormData(event.currentTarget));
-
-  setBusy(true);
-  setError('');
-  setMessage('');
-
-  try {
-    const { course } = await api(`/courses/${selected.id}`, {
-      ...values,
-      meetings: selected.meetings,
-    });
-
-    setSelected(course);
-    setCourses((previous) =>
-      previous.map((item) => (item.id === course.id ? course : item)),
-    );
-    setMessage('Course information saved.');
-  } catch (e) {
-    setError(e instanceof Error ? e.message : 'Request failed');
-  } finally {
-    setBusy(false);
-  }
-}
-async function deleteCourse() {
+    event.preventDefault();
     if (!selected) return;
-
-    const confirmed = window.confirm(
-      `Delete ${selected.name}? This action cannot be undone.`,
-    );
-
-    if (!confirmed) return;
-
+    const values = Object.fromEntries(new FormData(event.currentTarget));
     setBusy(true);
     setError('');
     setMessage('');
-
     try {
-      await api(`/courses/${selected.id}`, undefined, 'DELETE');
-
+      // The form edits name/location/notes; keep the other saved fields.
+      replaceCourse(
+        await updateCourse(supabase, selected.id, {
+          ...selected,
+          ...values,
+        }),
+      );
+      setMessage('Course information saved.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function deleteCourse() {
+    if (!selected) return;
+    const confirmed = window.confirm(
+      `Delete ${selected.name}? This action cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      if (!(await removeCourse(supabase, selected.id)))
+        throw new Error('Course not found');
       setSelected(null);
       setCourses((previous) =>
         previous.filter((item) => item.id !== selected.id),
@@ -148,20 +156,13 @@ async function deleteCourse() {
       setBusy(false);
     }
   }
-  
   async function saveMeetings(meetings: CourseMeeting[]) {
     if (!selected) return;
     setBusy(true);
     setError('');
     setMessage('');
     try {
-      const { course } = await api(`/courses/${selected.id}/meetings`, {
-        meetings,
-      });
-      setSelected(course);
-      setCourses((previous) =>
-        previous.map((item) => (item.id === course.id ? course : item)),
-      );
+      replaceCourse(await replaceMeetings(supabase, selected.id, meetings));
       setMessage('Meetings saved.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
@@ -178,14 +179,22 @@ async function deleteCourse() {
     setMessage('');
     try {
       if (!user) {
-        const data = await api(`/auth/${mode}`, values);
-        const saved = await api('/courses');
-        setUser(data.user);
-        setCourses(saved.courses);
+        const signedIn = await authenticate(
+          mode,
+          values.email,
+          values.password,
+        );
+        if (!signedIn) {
+          setMessage('Check your email to confirm your account, then sign in.');
+          setMode('login');
+          return;
+        }
+        setCourses(await listCourses(supabase));
+        setUser(signedIn);
       } else {
-        const data = await api('/courses', values);
-        setCourses((previous) => [...previous, data.course]);
-        setSelected(data.course);
+        const course = await createCourse(supabase, values);
+        setCourses((previous) => [...previous, course]);
+        setSelected(course);
         setSemesterFilter('');
         setMessage('Course saved.');
         form.reset();
@@ -200,7 +209,8 @@ async function deleteCourse() {
     setBusy(true);
     setError('');
     try {
-      await api('/auth/logout', {});
+      const { error } = await supabase.auth.signOut();
+      if (error) throw new Error('Unable to sign out. Try again.');
       setUser(null);
       setCourses([]);
       setSelected(null);
@@ -215,7 +225,9 @@ async function deleteCourse() {
   async function reopen(id: string) {
     setError('');
     try {
-      setSelected((await api(`/courses/${id}`)).course);
+      const course = await findCourse(supabase, id);
+      if (!course) throw new Error('Course not found');
+      setSelected(course);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
     }
@@ -349,58 +361,55 @@ async function deleteCourse() {
             <section aria-label="Selected course">
               <h2>{selected.name}</h2>
 
-          <button type="button" onClick={deleteCourse} disabled={busy}>
-            {busy ? 'Deleting…' : 'Delete course'}
-    </button>
-  <form
-    onSubmit={saveCourse}
-    key={
-    selected.id +
-    ':course:' +
-    selected.name +
-    ':' +
-    selected.location +
-    ':' +
-    selected.notes
-  }
->
-  <h3>Edit course information</h3>
+              <button type="button" onClick={deleteCourse} disabled={busy}>
+                {busy ? 'Deleting…' : 'Delete course'}
+              </button>
+              <form
+                onSubmit={saveCourse}
+                key={
+                  selected.id +
+                  ':course:' +
+                  selected.name +
+                  ':' +
+                  selected.location +
+                  ':' +
+                  selected.notes
+                }
+              >
+                <h3>Edit course information</h3>
 
-  <label>
-    Course name
-    <input
-      name="name"
-      required
-      maxLength={200}
-      defaultValue={selected.name}
-    />
-  </label>
+                <label>
+                  Course name
+                  <input
+                    name="name"
+                    required
+                    maxLength={200}
+                    defaultValue={selected.name}
+                  />
+                </label>
 
-  <label>
-    Location (optional)
-    <input
-      name="location"
-      type="text"
-      defaultValue={selected.location ?? ''}
-    />
-  </label>
+                <label>
+                  Location (optional)
+                  <input
+                    name="location"
+                    type="text"
+                    defaultValue={selected.location ?? ''}
+                  />
+                </label>
 
-  <label>
-    Notes (optional)
-    <textarea
-      name="notes"
-      defaultValue={selected.notes ?? ''}
-    />
-  </label>
+                <label>
+                  Notes (optional)
+                  <textarea name="notes" defaultValue={selected.notes ?? ''} />
+                </label>
 
-  <button disabled={busy}>
-    {busy ? 'Saving…' : 'Save course information'}
-  </button>
+                <button disabled={busy}>
+                  {busy ? 'Saving…' : 'Save course information'}
+                </button>
 
-  <button type="reset" disabled={busy}>
-    Cancel
-  </button>
-</form>
+                <button type="reset" disabled={busy}>
+                  Cancel
+                </button>
+              </form>
               <p>
                 Course code:{' '}
                 <span style={{ whiteSpace: 'pre-wrap' }}>

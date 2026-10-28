@@ -1,100 +1,112 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { testProject } from './support/project.js';
+import {
+  createCourse,
+  deleteCourse,
+  findCourse,
+  replaceMeetings,
+  updateCourse,
+} from '../src/web/features/courses/course-api.js';
+import { account, stack } from './support/supabase.js';
 
-test('CM-04: every meeting persists and invalid schedules do not replace saved values', async () => {
-  const project = await testProject();
-  const { request, account } = project;
-  try {
-    const cookie = await account('schedule@example.com');
-    const other = await account('other@example.com');
-    const meetings = [
-      { day: 'mon', startTime: '09:00', endTime: '10:15' },
-      { day: 'wed', startTime: '13:00', endTime: '14:00' },
-    ];
-    const first = (
-      await (
-        await request('/courses', cookie, {
-          name: 'Engineering',
-          code: 'CEN4010',
-          instructor: 'Dr. A',
-          meetings,
-        })
-      ).json()
-    ).course;
-    assert.deepEqual(first.meetings, meetings);
-    const second = (
-      await (await request('/courses', cookie, { name: 'Math' })).json()
-    ).course;
-    const route = `/courses/${first.id}/meetings`;
+const meetings = [
+  { day: 'mon' as const, startTime: '09:00', endTime: '10:15' },
+  { day: 'wed' as const, startTime: '09:00', endTime: '10:15' },
+];
+
+test(
+  'CM-04: schedules are replaced atomically and only by their owner',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const course = await createCourse(student, { name: 'Physics', meetings });
+    assert.deepEqual(course.meetings, meetings);
+
     const revised = [
-      ...meetings,
-      { day: 'fri', startTime: '08:00', endTime: '09:00' },
+      { day: 'fri' as const, startTime: '14:00', endTime: '15:30' },
     ];
-    assert.equal(
-      (await request(route, cookie, { meetings: revised })).status,
-      200,
+    assert.deepEqual(
+      (await replaceMeetings(student, course.id, revised)).meetings,
+      revised,
     );
-    for (const invalid of [
-      [{ day: 'mon', startTime: '10:00', endTime: '10:00' }],
-      [{ day: 'mon', startTime: '11:00', endTime: '10:00' }],
-      [{ day: 'bad', startTime: '09:00', endTime: '10:00' }],
-      [{ day: 'mon', startTime: '24:00', endTime: '25:00' }],
-      [{ day: 'mon', startTime: '9:00', endTime: '10:00' }],
-      [{ day: 'mon', startTime: '', endTime: '10:00' }],
-      null,
-      [null],
-      {},
-    ]) {
-      assert.equal(
-        (await request(route, cookie, { meetings: invalid })).status,
-        400,
-      );
-      assert.deepEqual(
-        (await (await request(`/courses/${first.id}`, cookie)).json()).course
-          .meetings,
-        revised,
-      );
-    }
-    assert.equal((await request(route, other, { meetings: [] })).status, 404);
-    assert.equal((await request(route, '', { meetings: [] })).status, 401);
-    const before = (await (await request('/courses', cookie)).json()).courses
-      .length;
-    assert.equal(
-      (
-        await request('/courses', cookie, {
-          name: 'Invalid',
-          meetings: [{ day: 'mon', startTime: '10:00', endTime: '09:00' }],
-        })
-      ).status,
-      400,
-    );
-    assert.equal(
-      (await (await request('/courses', cookie)).json()).courses.length,
-      before,
-    );
-    await request(`/courses/${first.id}/code`, cookie, { code: 'Updated' });
-    await request(`/courses/${first.id}/instructor`, cookie, {
-      instructor: 'Dr. Revised',
+    // The database rejects a bad row even if client validation is bypassed.
+    const bypass = await student.rpc('replace_course_meetings', {
+      p_course_id: course.id,
+      p_meetings: [
+        ...meetings,
+        { day: 'tue', startTime: '11:00', endTime: '10:00' },
+      ],
     });
-    await project.restart();
-    const saved = (await (await request(`/courses/${first.id}`, cookie)).json())
-      .course;
-    assert.deepEqual(saved.meetings, revised);
-    assert.equal(saved.code, 'Updated');
-    assert.equal(saved.instructor, 'Dr. Revised');
+    assert(bypass.error);
+    assert.deepEqual((await findCourse(student, course.id))?.meetings, revised);
+
+    const other = await account();
+    await assert.rejects(
+      replaceMeetings(other, course.id, []),
+      /Course not found/,
+    );
     assert.deepEqual(
-      (await (await request(`/courses/${second.id}`, cookie)).json()).course
-        .meetings,
+      (await replaceMeetings(student, course.id, [])).meetings,
       [],
     );
-    assert.equal((await request(route, cookie, { meetings: [] })).status, 200);
+  },
+);
+
+test(
+  'CM-06/07: full edits keep ownership; deletes cascade to meetings',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const course = await createCourse(student, {
+      name: 'Chemistry',
+      code: 'CHM1045',
+      semester: 'Fall 2026',
+      meetings,
+    });
+    const edited = await updateCourse(student, course.id, {
+      name: ' Organic Chemistry ',
+      code: 'CHM2210',
+      instructor: 'Dr. B',
+      semester: 'Spring 2027',
+      location: 'Room 101',
+      notes: 'Bring goggles',
+      meetings: meetings.slice(0, 1),
+    });
     assert.deepEqual(
-      (await (await request(`/courses/${first.id}`, cookie)).json()).course
-        .meetings,
-      [],
+      [
+        edited.name,
+        edited.code,
+        edited.instructor,
+        edited.semester,
+        edited.location,
+        edited.notes,
+        edited.meetings.length,
+      ],
+      [
+        'Organic Chemistry',
+        'CHM2210',
+        'Dr. B',
+        'Spring 2027',
+        'Room 101',
+        'Bring goggles',
+        1,
+      ],
     );
-  } finally {
-    await project.dispose();
-  }
-});
+
+    const other = await account();
+    await assert.rejects(
+      updateCourse(other, course.id, { name: 'Hijacked' }),
+      /Course not found/,
+    );
+    assert.equal(await deleteCourse(other, course.id), false);
+
+    assert.equal(await deleteCourse(student, course.id), true);
+    assert.equal(await findCourse(student, course.id), null);
+    assert.equal(await deleteCourse(student, course.id), false);
+    const orphans = await student
+      .from('course_meetings')
+      .select('id')
+      .eq('course_id', course.id);
+    assert.deepEqual(orphans.data, []);
+  },
+);
