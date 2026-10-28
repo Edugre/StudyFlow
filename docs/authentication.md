@@ -118,8 +118,19 @@ Semester labels are trimmed, limited to 100 characters, and stored as null when
 blank. Non-text values and repeated semester query parameters are rejected.
 
 The team has not defined a term vocabulary or current-semester rule, so labels
-are student-entered and no current semester is inferred. CM-08 remains pending.
+are student-entered and no current semester is inferred. CM-08 instead lets
+each student choose their current semester (see below).
 Existing schema supports semester storage without migration. Tests cover
 creation, moving courses between semesters, filtering, clearing, account
 isolation, preservation of other fields and restart persistence. CM-01–05 and
 SYS-01 are ready for Review; team UI review remains pending.
+
+## Current semester (CM-08)
+
+`student_settings` holds one row per student (`owner_id` defaults to
+`auth.uid()` and is not writable), with an optional `current_semester` label
+that is trimmed and stored as null when blank, like course semesters.
+`setCurrentSemester` upserts it and `getCurrentSemester` returns null when
+none is chosen. The course list opens filtered to the current semester, shows
+"No courses in your current semester." when it is empty, and keeps "All
+semesters" available. Nothing is inferred from dates.

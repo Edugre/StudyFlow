@@ -34,6 +34,16 @@ on Vercel that uses `supabase-js` directly against Supabase Postgres and Auth.
   Cron; new feature tables follow the same RLS pattern; CM-10 needs an explicit
   `on delete` policy for links to courses.
 
+# Current semester is student-chosen (CM-08)
+
+Recorded 2026-10-29. Status: implemented, pending team review.
+
+Semesters remain free-text labels, so the app cannot infer the current one
+from today's date. Each student picks their current semester from their own
+labels; it is stored in `student_settings` under the same RLS pattern.
+Rejected: parsing "Term YYYY" labels by month (forces a label format) and
+semester start/end dates (a larger schema change the team has not asked for).
+
 # Previous: authentication on Express + SQLite (2026-10-02)
 
 Superseded by the decision above; see git history for `src/server`.

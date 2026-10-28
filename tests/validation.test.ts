@@ -7,6 +7,7 @@ import {
   updateCourse,
   updateCourseField,
 } from '../src/web/features/courses/course-api.js';
+import { setCurrentSemester } from '../src/web/features/courses/settings-api.js';
 import { validMeetings } from '../src/shared/meetings.js';
 
 // Invalid input must be rejected before any request is made.
@@ -60,4 +61,12 @@ test('course input is validated before reaching Supabase', async () => {
     updateCourse(offline, 'id', { name: 'Math', notes: 1 }),
     /Notes must be text/,
   );
+});
+
+test('current semester input is validated before reaching Supabase', async () => {
+  await assert.rejects(
+    setCurrentSemester(offline, 'x'.repeat(101)),
+    /at most 100 characters/,
+  );
+  await assert.rejects(setCurrentSemester(offline, 42), /must be text/);
 });

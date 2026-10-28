@@ -39,7 +39,7 @@ function fail(error: PostgrestError): never {
   throw new Error('Request failed');
 }
 
-function text(value: unknown, label: string, max?: number) {
+export function text(value: unknown, label: string, max?: number) {
   if (value === undefined || value === null) return null;
   if (typeof value !== 'string' || (max && value.length > max))
     throw new Error(
