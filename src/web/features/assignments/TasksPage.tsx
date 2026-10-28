@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
-  kindLabel,
+  optionLabel,
+  priorities,
   taskKinds,
   type Assignment,
 } from '../../../shared/assignment.js';
@@ -13,11 +14,17 @@ import {
   listAssignments,
   setAssignmentCourse,
   setAssignmentKind,
+  setAssignmentPriority,
 } from './assignment-api.js';
 
 const kindOptions = taskKinds.map((kind) => (
   <option key={kind} value={kind}>
-    {kindLabel(kind)}
+    {optionLabel(kind)}
+  </option>
+));
+const priorityOptions = priorities.map((priority) => (
+  <option key={priority} value={priority}>
+    {optionLabel(priority)}
   </option>
 ));
 
@@ -34,6 +41,7 @@ export function TasksPage() {
  * AT-01: every task the student has saved, with or without a course.
  * AT-02: each task can be linked to one of the student's courses.
  * AT-04: each task is an assignment, exam, quiz, or project.
+ * AT-05: each task has a Low, Medium, or High priority.
  */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
@@ -85,6 +93,7 @@ function TaskList() {
         title: values.title,
         courseId: values.courseId,
         kind: values.kind,
+        priority: values.priority,
       });
       setTasks((previous) => [...previous, saved]);
       opening.current = null;
@@ -94,25 +103,15 @@ function TaskList() {
     });
   }
 
-  function moveTask(id: string, courseId: string) {
+  /** Saves one detail of the open task and shows the saved result. */
+  function saveTask(save: () => Promise<Assignment>, done: string) {
     void run(async () => {
-      const saved = await setAssignmentCourse(supabase, id, courseId || null);
+      const saved = await save();
       setTasks((previous) =>
-        previous.map((task) => (task.id === id ? saved : task)),
+        previous.map((task) => (task.id === saved.id ? saved : task)),
       );
       setSelected(saved);
-      return 'Course saved.';
-    });
-  }
-
-  function changeKind(id: string, kind: string) {
-    void run(async () => {
-      const saved = await setAssignmentKind(supabase, id, kind);
-      setTasks((previous) =>
-        previous.map((task) => (task.id === id ? saved : task)),
-      );
-      setSelected(saved);
-      return 'Type saved.';
+      return done;
     });
   }
 
@@ -162,6 +161,12 @@ function TaskList() {
           </select>
         </label>
         <label>
+          Priority
+          <select name="priority" defaultValue="medium">
+            {priorityOptions}
+          </select>
+        </label>
+        <label>
           Course (optional)
           <select name="courseId" defaultValue="">
             {courseOptions}
@@ -179,7 +184,8 @@ function TaskList() {
               <button disabled={busy} onClick={() => reopen(task.id)}>
                 {task.title}
               </button>{' '}
-              <span className="tag">{kindLabel(task.kind)}</span>
+              <span className="tag">{optionLabel(task.kind)}</span>{' '}
+              <span className="tag">{optionLabel(task.priority)} priority</span>
               {courseName(task) && ` — ${courseName(task)}`}
             </li>
           ))}
@@ -193,7 +199,11 @@ function TaskList() {
           <dl className="course-details">
             <div>
               <dt>Type</dt>
-              <dd>{kindLabel(selected.kind)}</dd>
+              <dd>{optionLabel(selected.kind)}</dd>
+            </div>
+            <div>
+              <dt>Priority</dt>
+              <dd>{optionLabel(selected.priority)}</dd>
             </div>
             <div>
               <dt>Course</dt>
@@ -205,9 +215,39 @@ function TaskList() {
             <select
               value={selected.kind}
               disabled={busy}
-              onChange={(event) => changeKind(selected.id, event.target.value)}
+              onChange={(event) =>
+                saveTask(
+                  () =>
+                    setAssignmentKind(
+                      supabase,
+                      selected.id,
+                      event.target.value,
+                    ),
+                  'Type saved.',
+                )
+              }
             >
               {kindOptions}
+            </select>
+          </label>
+          <label>
+            Change priority
+            <select
+              value={selected.priority}
+              disabled={busy}
+              onChange={(event) =>
+                saveTask(
+                  () =>
+                    setAssignmentPriority(
+                      supabase,
+                      selected.id,
+                      event.target.value,
+                    ),
+                  'Priority saved.',
+                )
+              }
+            >
+              {priorityOptions}
             </select>
           </label>
           <label>
@@ -215,7 +255,17 @@ function TaskList() {
             <select
               value={selected.courseId ?? ''}
               disabled={busy}
-              onChange={(event) => moveTask(selected.id, event.target.value)}
+              onChange={(event) =>
+                saveTask(
+                  () =>
+                    setAssignmentCourse(
+                      supabase,
+                      selected.id,
+                      event.target.value || null,
+                    ),
+                  'Course saved.',
+                )
+              }
             >
               {courseOptions}
             </select>

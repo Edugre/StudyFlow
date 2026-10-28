@@ -1,9 +1,12 @@
 export const taskKinds = ['assignment', 'exam', 'quiz', 'project'] as const;
 export type TaskKind = (typeof taskKinds)[number];
 
+export const priorities = ['low', 'medium', 'high'] as const;
+export type Priority = (typeof priorities)[number];
+
 /** "exam" → "Exam", for labels. */
-export const kindLabel = (kind: TaskKind) =>
-  kind.charAt(0).toUpperCase() + kind.slice(1);
+export const optionLabel = (value: TaskKind | Priority) =>
+  value.charAt(0).toUpperCase() + value.slice(1);
 
 export interface Assignment {
   id: string;
@@ -11,4 +14,5 @@ export interface Assignment {
   /** The linked course, or null when the assignment has none. */
   courseId: string | null;
   kind: TaskKind;
+  priority: Priority;
 }
