@@ -63,3 +63,29 @@ section {
   background: white;
   margin-top: 1rem;
 }
+.course-details {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+.course-details div {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 1rem;
+}
+.course-details dt {
+  font-weight: 600;
+}
+.course-details dd,
+.course-details ul {
+  margin: 0;
+}
+.course-details ul {
+  padding-left: 1.2rem;
+}
+@media (max-width: 30rem) {
+  .course-details div {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
