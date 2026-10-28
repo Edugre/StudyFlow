@@ -2,10 +2,12 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Assignment } from '../../../shared/assignment.js';
 import { supabase } from '../../lib/supabase.js';
 import { AuthGate } from '../auth/AuthGate.js';
+import { listCourses, type SavedCourse } from '../courses/course-api.js';
 import {
   createAssignment,
   findAssignment,
   listAssignments,
+  setAssignmentCourse,
 } from './assignment-api.js';
 
 export function TasksPage() {
@@ -17,9 +19,13 @@ export function TasksPage() {
   );
 }
 
-/** AT-01: every task the student has saved, with or without a course. */
+/**
+ * AT-01: every task the student has saved, with or without a course.
+ * AT-02: each task can be linked to one of the student's courses.
+ */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
+  const [courses, setCourses] = useState<SavedCourse[]>([]);
   const [selected, setSelected] = useState<Assignment | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -30,10 +36,11 @@ function TaskList() {
 
   useEffect(() => {
     let active = true;
-    listAssignments(supabase)
-      .then((saved) => {
+    Promise.all([listAssignments(supabase), listCourses(supabase)])
+      .then(([savedTasks, savedCourses]) => {
         if (!active) return;
-        setTasks(saved);
+        setTasks(savedTasks);
+        setCourses(savedCourses);
         setLoaded(true);
       })
       .catch((e) => {
@@ -62,7 +69,10 @@ function TaskList() {
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form));
     void run(async () => {
-      const saved = await createAssignment(supabase, { title: values.title });
+      const saved = await createAssignment(supabase, {
+        title: values.title,
+        courseId: values.courseId,
+      });
       setTasks((previous) => [...previous, saved]);
       opening.current = null;
       setSelected(saved);
@@ -70,6 +80,31 @@ function TaskList() {
       return 'Task saved.';
     });
   }
+
+  function moveTask(id: string, courseId: string) {
+    void run(async () => {
+      const saved = await setAssignmentCourse(supabase, id, courseId || null);
+      setTasks((previous) =>
+        previous.map((task) => (task.id === id ? saved : task)),
+      );
+      setSelected(saved);
+      return 'Course saved.';
+    });
+  }
+
+  const courseName = (task: Assignment) =>
+    courses.find((course) => course.id === task.courseId)?.name ?? null;
+
+  const courseOptions = (
+    <>
+      <option value="">No course</option>
+      {courses.map((course) => (
+        <option key={course.id} value={course.id}>
+          {course.name}
+        </option>
+      ))}
+    </>
+  );
 
   async function reopen(id: string) {
     opening.current = id;
@@ -96,6 +131,12 @@ function TaskList() {
           Title
           <input name="title" required maxLength={200} />
         </label>
+        <label>
+          Course (optional)
+          <select name="courseId" defaultValue="">
+            {courseOptions}
+          </select>
+        </label>
         <button disabled={busy}>{busy ? 'Saving…' : 'Add task'}</button>
       </form>
       <h2>Your tasks</h2>
@@ -108,6 +149,7 @@ function TaskList() {
               <button disabled={busy} onClick={() => reopen(task.id)}>
                 {task.title}
               </button>
+              {courseName(task) && ` — ${courseName(task)}`}
             </li>
           ))}
         </ul>
@@ -117,6 +159,22 @@ function TaskList() {
       {selected && (
         <section aria-label="Selected task">
           <h2>{selected.title}</h2>
+          <dl className="course-details">
+            <div>
+              <dt>Course</dt>
+              <dd>{courseName(selected) ?? 'No course'}</dd>
+            </div>
+          </dl>
+          <label>
+            Change course
+            <select
+              value={selected.courseId ?? ''}
+              disabled={busy}
+              onChange={(event) => moveTask(selected.id, event.target.value)}
+            >
+              {courseOptions}
+            </select>
+          </label>
         </section>
       )}
     </>
