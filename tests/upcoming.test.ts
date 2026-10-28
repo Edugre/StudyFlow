@@ -16,6 +16,7 @@ const task = (
   dueDate,
   dueTime,
   completedAt,
+  grade: null,
 });
 
 // Local time, like the deadlines themselves: Nov 2, 2026 at 12:00.

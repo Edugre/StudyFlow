@@ -21,6 +21,8 @@ export interface Assignment {
   dueTime: string | null;
   /** When the task was marked completed, or null while it is open. */
   completedAt: string | null;
+  /** Percentage grade from 0 through 100, only on completed tasks. */
+  grade: number | null;
 }
 
 const pad = (value: number) => String(value).padStart(2, '0');

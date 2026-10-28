@@ -7,6 +7,7 @@ import {
   editAssignment,
   findAssignment,
   listAssignments,
+  recordGrade,
   setAssignmentCourse,
   setAssignmentDue,
   setAssignmentKind,
@@ -36,6 +37,7 @@ test(
       dueDate: null,
       dueTime: null,
       completedAt: null,
+      grade: null,
     });
     assert.equal(await findAssignment(other, task.id), null);
   },
@@ -122,6 +124,7 @@ test(
       dueDate: null,
       dueTime: null,
       completedAt: null,
+      grade: null,
     });
 
     await assert.rejects(
@@ -294,6 +297,7 @@ test(
       dueDate: '2026-12-01',
       dueTime: '23:59',
       completedAt: null,
+      grade: null,
     };
     assert.deepEqual(await findAssignment(student, essay.id), edited);
     assert.deepEqual(await findAssignment(student, lab.id), labBefore);
@@ -358,5 +362,41 @@ test(
     // Deleting again, or an unknown id, finds nothing.
     assert.equal(await deleteAssignment(student, essay.id), false);
     assert.equal(await deleteAssignment(student, 'not-a-uuid'), false);
+  },
+);
+
+test(
+  'AT-10: a completed task keeps a valid grade, and invalid grades change nothing',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const other = await account();
+    const essay = await createAssignment(student, { title: 'Essay' });
+
+    await assert.rejects(
+      recordGrade(student, essay.id, 90),
+      /Mark the task completed before recording a grade/,
+    );
+    assert.equal((await findAssignment(student, essay.id))?.grade, null);
+
+    await completeAssignment(student, essay.id);
+    await recordGrade(student, essay.id, '92.5');
+    assert.equal((await findAssignment(student, essay.id))?.grade, 92.5);
+
+    for (const invalid of ['abc', '', '-1', '100.01'])
+      await assert.rejects(
+        recordGrade(student, essay.id, invalid),
+        /Enter a grade from 0 to 100/,
+      );
+    assert.equal((await findAssignment(student, essay.id))?.grade, 92.5);
+
+    for (const edge of [0, 100])
+      assert.equal((await recordGrade(student, essay.id, edge)).grade, edge);
+
+    await assert.rejects(
+      recordGrade(other, essay.id, 50),
+      /Assignment not found/,
+    );
+    assert.equal((await findAssignment(student, essay.id))?.grade, 100);
   },
 );
