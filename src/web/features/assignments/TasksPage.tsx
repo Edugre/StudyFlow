@@ -3,6 +3,7 @@ import {
   optionLabel,
   priorities,
   taskKinds,
+  upcomingTasks,
   type Assignment,
 } from '../../../shared/assignment.js';
 import { supabase } from '../../lib/supabase.js';
@@ -50,6 +51,7 @@ export function TasksPage() {
  * AT-06: a task can be marked completed, once.
  * AT-07: every editable detail can be changed in one form, or cancelled.
  * AT-08: a task can be deleted after confirming.
+ * AT-09: open tasks with future deadlines are listed earliest first.
  */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
@@ -154,6 +156,9 @@ function TaskList() {
     });
   }
 
+  // Recomputed on every render, so edits and the passing of time both apply.
+  const upcoming = upcomingTasks(tasks);
+
   const courseName = (task: Assignment) =>
     courses.find((course) => course.id === task.courseId)?.name ?? null;
 
@@ -222,6 +227,23 @@ function TaskList() {
         </label>
         <button disabled={busy}>{busy ? 'Saving…' : 'Add task'}</button>
       </form>
+      <h2>Upcoming</h2>
+      {loaded &&
+        (upcoming.length ? (
+          <ol>
+            {upcoming.map((task) => (
+              <li key={task.id}>
+                <button disabled={busy} onClick={() => reopen(task.id)}>
+                  {task.title}
+                </button>{' '}
+                — due {dueText(task)}
+                {courseName(task) && ` — ${courseName(task)}`}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>No upcoming tasks.</p>
+        ))}
       <h2>Your tasks</h2>
       {!loaded ? (
         !error && <p>Loading tasks…</p>
