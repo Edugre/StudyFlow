@@ -1,4 +1,4 @@
-import type { CourseMeeting } from '../../../shared/course.js';
+import type { CourseMeeting } from './course.js';
 const days = new Set(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
 const time = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 export function validMeetings(value: unknown): value is CourseMeeting[] {
