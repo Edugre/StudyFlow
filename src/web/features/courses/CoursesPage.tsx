@@ -1,6 +1,7 @@
+import { CourseDetails } from './CourseDetails.js';
 import { MeetingsEditor } from './MeetingsEditor.js';
 import type { CourseMeeting } from '../../../shared/course.js';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { supabase } from '../../lib/supabase.js';
 import {
   createCourse,
@@ -54,6 +55,8 @@ export function CoursesPage() {
     ? courses.filter((course) => course.semester === semesterFilter)
     : courses;
   const [busy, setBusy] = useState(false);
+  // The most recently opened course id; older responses are discarded.
+  const opening = useRef<string | null>(null);
   useEffect(() => {
     let active = true;
     supabase.auth
@@ -194,6 +197,7 @@ export function CoursesPage() {
       } else {
         const course = await createCourse(supabase, values);
         setCourses((previous) => [...previous, course]);
+        opening.current = null;
         setSelected(course);
         setSemesterFilter('');
         setMessage('Course saved.');
@@ -213,6 +217,7 @@ export function CoursesPage() {
       if (error) throw new Error('Unable to sign out. Try again.');
       setUser(null);
       setCourses([]);
+      opening.current = null;
       setSelected(null);
       setMessage('');
       setSemesterFilter('');
@@ -223,12 +228,16 @@ export function CoursesPage() {
     }
   }
   async function reopen(id: string) {
+    opening.current = id;
     setError('');
+    setSelected(null);
     try {
       const course = await findCourse(supabase, id);
+      if (opening.current !== id) return;
       if (!course) throw new Error('Course not found');
       setSelected(course);
     } catch (e) {
+      if (opening.current !== id) return;
       setError(e instanceof Error ? e.message : 'Request failed');
     }
   }
@@ -324,6 +333,7 @@ export function CoursesPage() {
               disabled={busy}
               onChange={(event) => {
                 setSemesterFilter(event.target.value);
+                opening.current = null;
                 setSelected(null);
               }}
             >
@@ -360,141 +370,127 @@ export function CoursesPage() {
           {selected && (
             <section aria-label="Selected course">
               <h2>{selected.name}</h2>
+              <CourseDetails course={selected} />
 
               <button type="button" onClick={deleteCourse} disabled={busy}>
                 {busy ? 'Deleting…' : 'Delete course'}
               </button>
-              <form
-                onSubmit={saveCourse}
-                key={
-                  selected.id +
-                  ':course:' +
-                  selected.name +
-                  ':' +
-                  selected.location +
-                  ':' +
-                  selected.notes
-                }
-              >
-                <h3>Edit course information</h3>
+              <details>
+                <summary>Edit course</summary>
+                <form
+                  onSubmit={saveCourse}
+                  key={
+                    selected.id +
+                    ':course:' +
+                    selected.name +
+                    ':' +
+                    selected.location +
+                    ':' +
+                    selected.notes
+                  }
+                >
+                  <h3>Edit course information</h3>
 
-                <label>
-                  Course name
-                  <input
-                    name="name"
-                    required
-                    maxLength={200}
-                    defaultValue={selected.name}
-                  />
-                </label>
+                  <label>
+                    Course name
+                    <input
+                      name="name"
+                      required
+                      maxLength={200}
+                      defaultValue={selected.name}
+                    />
+                  </label>
 
-                <label>
-                  Location (optional)
-                  <input
-                    name="location"
-                    type="text"
-                    defaultValue={selected.location ?? ''}
-                  />
-                </label>
+                  <label>
+                    Location (optional)
+                    <input
+                      name="location"
+                      type="text"
+                      defaultValue={selected.location ?? ''}
+                    />
+                  </label>
 
-                <label>
-                  Notes (optional)
-                  <textarea name="notes" defaultValue={selected.notes ?? ''} />
-                </label>
+                  <label>
+                    Notes (optional)
+                    <textarea
+                      name="notes"
+                      defaultValue={selected.notes ?? ''}
+                    />
+                  </label>
 
-                <button disabled={busy}>
-                  {busy ? 'Saving…' : 'Save course information'}
-                </button>
+                  <button disabled={busy}>
+                    {busy ? 'Saving…' : 'Save course information'}
+                  </button>
 
-                <button type="reset" disabled={busy}>
-                  Cancel
-                </button>
-              </form>
-              <p>
-                Course code:{' '}
-                <span style={{ whiteSpace: 'pre-wrap' }}>
-                  {selected.code || 'Not set'}
-                </span>
-              </p>
-              <form
-                onSubmit={(event) => saveField(event, 'code')}
-                key={selected.id + ':' + selected.code}
-              >
-                <label>
-                  Edit course code
-                  <input
-                    name="code"
-                    type="text"
-                    defaultValue={selected.code ?? ''}
-                  />
-                </label>
-                <button disabled={busy}>
-                  {busy ? 'Saving…' : 'Save code'}
-                </button>
-                <button type="reset" disabled={busy}>
-                  Cancel
-                </button>
-              </form>
-              <p>Instructor: {selected.instructor || 'Not set'}</p>
-              <form
-                onSubmit={(event) => saveField(event, 'instructor')}
-                key={selected.id + ':instructor:' + selected.instructor}
-              >
-                <label>
-                  Edit instructor
-                  <input
-                    name="instructor"
-                    type="text"
-                    defaultValue={selected.instructor ?? ''}
-                  />
-                </label>
-                <button disabled={busy}>
-                  {busy ? 'Saving…' : 'Save instructor'}
-                </button>
-                <button type="reset" disabled={busy}>
-                  Cancel
-                </button>
-              </form>
-              <p>Semester: {selected.semester || 'Not set'}</p>
-              <form
-                onSubmit={(event) => saveField(event, 'semester')}
-                key={selected.id + ':semester:' + selected.semester}
-              >
-                <label>
-                  Edit semester
-                  <input
-                    name="semester"
-                    list="semester-options"
-                    maxLength={100}
-                    defaultValue={selected.semester ?? ''}
-                  />
-                </label>
-                <button disabled={busy}>
-                  {busy ? 'Saving…' : 'Save semester'}
-                </button>
-                <button type="reset" disabled={busy}>
-                  Cancel
-                </button>
-              </form>
-              <h3>Course schedule</h3>
-              {selected.meetings.length ? (
-                <ul>
-                  {selected.meetings.map((meeting, index) => (
-                    <li key={index}>
-                      {meeting.day.toUpperCase()} {meeting.startTime}–
-                      {meeting.endTime}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>No meetings set.</p>
-              )}
-              <MeetingsEditor
-                key={selected.id + JSON.stringify(selected.meetings)}
-                meetings={selected.meetings}
-                busy={busy}
-                onSave={saveMeetings}
-              />
+                  <button type="reset" disabled={busy}>
+                    Cancel
+                  </button>
+                </form>
+                <form
+                  onSubmit={(event) => saveField(event, 'code')}
+                  key={selected.id + ':' + selected.code}
+                >
+                  <label>
+                    Edit course code
+                    <input
+                      name="code"
+                      type="text"
+                      defaultValue={selected.code ?? ''}
+                    />
+                  </label>
+                  <button disabled={busy}>
+                    {busy ? 'Saving…' : 'Save code'}
+                  </button>
+                  <button type="reset" disabled={busy}>
+                    Cancel
+                  </button>
+                </form>
+                <form
+                  onSubmit={(event) => saveField(event, 'instructor')}
+                  key={selected.id + ':instructor:' + selected.instructor}
+                >
+                  <label>
+                    Edit instructor
+                    <input
+                      name="instructor"
+                      type="text"
+                      defaultValue={selected.instructor ?? ''}
+                    />
+                  </label>
+                  <button disabled={busy}>
+                    {busy ? 'Saving…' : 'Save instructor'}
+                  </button>
+                  <button type="reset" disabled={busy}>
+                    Cancel
+                  </button>
+                </form>
+                <form
+                  onSubmit={(event) => saveField(event, 'semester')}
+                  key={selected.id + ':semester:' + selected.semester}
+                >
+                  <label>
+                    Edit semester
+                    <input
+                      name="semester"
+                      list="semester-options"
+                      maxLength={100}
+                      defaultValue={selected.semester ?? ''}
+                    />
+                  </label>
+                  <button disabled={busy}>
+                    {busy ? 'Saving…' : 'Save semester'}
+                  </button>
+                  <button type="reset" disabled={busy}>
+                    Cancel
+                  </button>
+                </form>
+                <MeetingsEditor
+                  key={selected.id + JSON.stringify(selected.meetings)}
+                  meetings={selected.meetings}
+                  busy={busy}
+                  onSave={saveMeetings}
+                />
+              </details>
             </section>
           )}
         </>
