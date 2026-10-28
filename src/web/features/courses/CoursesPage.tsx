@@ -1,3 +1,4 @@
+import { AuthGate } from '../auth/AuthGate.js';
 import { CourseDetails } from './CourseDetails.js';
 import { Coursework } from './Coursework.js';
 import { MeetingsEditor } from './MeetingsEditor.js';
@@ -25,31 +26,17 @@ async function loadWorkspace() {
   return { courses, currentSemester };
 }
 
-async function authenticate(mode: string, email: unknown, password: unknown) {
-  if (
-    typeof email !== 'string' ||
-    email.length > 254 ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
-    typeof password !== 'string' ||
-    password.length < 12 ||
-    password.length > 128
-  )
-    throw new Error('Enter a valid email and a password of 12–128 characters.');
-  const credentials = { email: email.trim().toLowerCase(), password };
-  if (mode === 'login') {
-    const { data, error } = await supabase.auth.signInWithPassword(credentials);
-    if (error) throw new Error('Email or password is incorrect.');
-    return data.user;
-  }
-  const { data, error } = await supabase.auth.signUp(credentials);
-  if (error) throw new Error('Unable to create account with these details.');
-  // With email confirmation enabled, sign-up returns no session.
-  return data.session ? data.user : null;
-}
 export function CoursesPage() {
-  const [user, setUser] = useState<{ email?: string } | null>(null);
+  return (
+    <>
+      <h1>Courses</h1>
+      <AuthGate>{() => <CourseWorkspace />}</AuthGate>
+    </>
+  );
+}
+
+function CourseWorkspace() {
   const [ready, setReady] = useState(false);
-  const [mode, setMode] = useState('login');
   const [courses, setCourses] = useState<SavedCourse[]>([]);
   const [selected, setSelected] = useState<SavedCourse | null>(null);
   const [error, setError] = useState('');
@@ -72,14 +59,10 @@ export function CoursesPage() {
   const opening = useRef<string | null>(null);
   useEffect(() => {
     let active = true;
-    supabase.auth
-      .getSession()
-      .then(async ({ data }) => {
-        const sessionUser = data.session?.user ?? null;
-        const saved = sessionUser ? await loadWorkspace() : null;
+    loadWorkspace()
+      .then((saved) => {
         if (active) {
-          setUser(sessionUser);
-          if (saved) showWorkspace(saved);
+          showWorkspace(saved);
           setReady(true);
         }
       })
@@ -219,47 +202,13 @@ export function CoursesPage() {
     setError('');
     setMessage('');
     try {
-      if (!user) {
-        const signedIn = await authenticate(
-          mode,
-          values.email,
-          values.password,
-        );
-        if (!signedIn) {
-          setMessage('Check your email to confirm your account, then sign in.');
-          setMode('login');
-          return;
-        }
-        showWorkspace(await loadWorkspace());
-        setUser(signedIn);
-      } else {
-        const course = await createCourse(supabase, values);
-        setCourses((previous) => [...previous, course]);
-        opening.current = null;
-        setSelected(course);
-        setSemesterFilter('');
-        setMessage('Course saved.');
-        form.reset();
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Request failed');
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function logout() {
-    setBusy(true);
-    setError('');
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw new Error('Unable to sign out. Try again.');
-      setUser(null);
-      setCourses([]);
+      const course = await createCourse(supabase, values);
+      setCourses((previous) => [...previous, course]);
       opening.current = null;
-      setSelected(null);
-      setMessage('');
+      setSelected(course);
       setSemesterFilter('');
-      setCurrent(null);
+      setMessage('Course saved.');
+      form.reset();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
@@ -282,63 +231,12 @@ export function CoursesPage() {
   }
   return (
     <>
-      <h1>Courses</h1>
       {error && <p role="alert">{error}</p>}
       {message && <p role="status">{message}</p>}
       {!ready ? (
-        <p>Loading your workspace…</p>
-      ) : !user ? (
-        <>
-          <h2>{mode === 'login' ? 'Sign in' : 'Create account'}</h2>
-          <form onSubmit={submit} key={mode}>
-            <label>
-              Email
-              <input
-                name="email"
-                type="email"
-                autoComplete="username"
-                required
-                maxLength={254}
-              />
-            </label>
-            <label>
-              Password
-              <input
-                name="password"
-                type="password"
-                autoComplete={
-                  mode === 'login' ? 'current-password' : 'new-password'
-                }
-                required
-                minLength={12}
-                maxLength={128}
-              />
-            </label>
-            <p>Use a password of 12–128 characters.</p>
-            <button disabled={busy}>
-              {busy
-                ? 'Please wait…'
-                : mode === 'login'
-                  ? 'Sign in'
-                  : 'Create account'}
-            </button>
-          </form>
-          <button
-            disabled={busy}
-            onClick={() => {
-              setMode(mode === 'login' ? 'register' : 'login');
-              setError('');
-            }}
-          >
-            {mode === 'login' ? 'Need an account?' : 'Already have an account?'}
-          </button>
-        </>
+        !error && <p>Loading courses…</p>
       ) : (
         <>
-          <p>Signed in as {user.email}</p>
-          <button disabled={busy} onClick={logout}>
-            Sign out
-          </button>
           <h2>Add a course</h2>
           <form onSubmit={submit}>
             <label>

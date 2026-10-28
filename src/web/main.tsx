@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
+import { TasksPage } from './features/assignments/TasksPage.js';
 import { CoursesPage } from './features/courses/CoursesPage.js';
 import './styles.css';
 
@@ -11,6 +12,7 @@ createRoot(document.getElementById('root')!).render(
         <Link to="/">StudyFlow</Link>
         <nav aria-label="Main navigation">
           <Link to="/courses">Courses</Link>
+          <Link to="/tasks">Tasks</Link>
         </nav>
       </header>
       <main>
@@ -28,6 +30,7 @@ createRoot(document.getElementById('root')!).render(
             }
           />
           <Route path="/courses" element={<CoursesPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
           <Route
             path="*"
             element={
