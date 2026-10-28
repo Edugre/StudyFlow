@@ -22,3 +22,27 @@ export interface Assignment {
   /** When the task was marked completed, or null while it is open. */
   completedAt: string | null;
 }
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+/**
+ * AT-09: open tasks whose deadline is now or later, earliest first.
+ * Deadlines are local wall time, so "now" is read in the browser's local
+ * time. A date-only deadline counts as the end of that day, so it stays
+ * upcoming all day and sorts after timed deadlines on the same date.
+ */
+export function upcomingTasks(tasks: Assignment[], now = new Date()) {
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  // '24:00' sorts after every real time.
+  const deadline = (task: Assignment) =>
+    `${task.dueDate} ${task.dueTime ?? '24:00'}`;
+  return tasks
+    .filter(
+      (task) =>
+        !task.completedAt &&
+        task.dueDate !== null &&
+        deadline(task) >= `${today} ${time}`,
+    )
+    .sort((a, b) => deadline(a).localeCompare(deadline(b)));
+}
