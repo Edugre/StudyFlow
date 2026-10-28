@@ -10,6 +10,7 @@ import {
 import {
   createAssignment,
   setAssignmentKind,
+  setAssignmentPriority,
 } from '../src/web/features/assignments/assignment-api.js';
 import {
   createStudySession,
@@ -96,6 +97,14 @@ test('coursework input is validated before reaching Supabase', async () => {
   await assert.rejects(
     setAssignmentKind(offline, crypto.randomUUID(), 'homework'),
     /Choose assignment, exam, quiz, or project/,
+  );
+  await assert.rejects(
+    createAssignment(offline, { title: 'Essay', priority: 'urgent' }),
+    /Choose Low, Medium, or High priority/,
+  );
+  await assert.rejects(
+    setAssignmentPriority(offline, crypto.randomUUID(), 'urgent'),
+    /Choose Low, Medium, or High priority/,
   );
   const valid = { date: '2026-11-02', startTime: '18:00', durationMinutes: 60 };
   for (const invalid of [

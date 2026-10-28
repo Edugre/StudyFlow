@@ -6,6 +6,7 @@ import {
   listAssignments,
   setAssignmentCourse,
   setAssignmentKind,
+  setAssignmentPriority,
 } from '../src/web/features/assignments/assignment-api.js';
 import { createCourse } from '../src/web/features/courses/course-api.js';
 import { account, stack } from './support/supabase.js';
@@ -27,6 +28,7 @@ test(
       title: 'Read ch. 4',
       courseId: null,
       kind: 'assignment',
+      priority: 'medium',
     });
     assert.equal(await findAssignment(other, task.id), null);
   },
@@ -109,6 +111,7 @@ test(
       title: 'Midterm',
       courseId: math.id,
       kind: 'exam',
+      priority: 'medium',
     });
 
     await assert.rejects(
@@ -116,5 +119,40 @@ test(
       /Assignment not found/,
     );
     assert.equal((await findAssignment(student, midterm.id))?.kind, 'exam');
+  },
+);
+
+test(
+  'AT-05: a task keeps its priority, and changing it affects only that task',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const other = await account();
+
+    for (const priority of ['low', 'medium', 'high'] as const) {
+      const task = await createAssignment(student, {
+        title: priority,
+        priority,
+      });
+      assert.equal(
+        (await findAssignment(student, task.id))?.priority,
+        priority,
+      );
+    }
+
+    const essay = await createAssignment(student, { title: 'Essay' });
+    const lab = await createAssignment(student, { title: 'Lab' });
+    assert.equal(essay.priority, 'medium');
+
+    await setAssignmentPriority(student, essay.id, 'high');
+    await setAssignmentPriority(student, essay.id, 'low');
+    assert.equal((await findAssignment(student, essay.id))?.priority, 'low');
+    assert.equal((await findAssignment(student, lab.id))?.priority, 'medium');
+
+    await assert.rejects(
+      setAssignmentPriority(other, essay.id, 'high'),
+      /Assignment not found/,
+    );
+    assert.equal((await findAssignment(student, essay.id))?.priority, 'low');
   },
 );

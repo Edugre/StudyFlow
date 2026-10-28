@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { kindLabel, type Assignment } from '../../../shared/assignment.js';
+import { optionLabel, type Assignment } from '../../../shared/assignment.js';
 import type { StudySession } from '../../../shared/study-session.js';
 import { supabase } from '../../lib/supabase.js';
 import {
@@ -149,7 +149,7 @@ export function Coursework({
               {assignments.map((assignment) => (
                 <li key={assignment.id}>
                   {assignment.title}{' '}
-                  <span className="tag">{kindLabel(assignment.kind)}</span>
+                  <span className="tag">{optionLabel(assignment.kind)}</span>
                   {courseSelect(`Course for ${assignment.title}`, (id) =>
                     moveAssignment(assignment.id, id),
                   )}
