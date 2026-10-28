@@ -11,7 +11,8 @@ import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 
 /**
  * Assignment data access (AT-01) with course links (CM-10, AT-02) and
- * task types (AT-04), priorities (AT-05) and deadlines (AT-03). Ownership is enforced by row level security.
+ * task types (AT-04), priorities (AT-05), deadlines (AT-03) and completion
+ * (AT-06). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
@@ -21,8 +22,10 @@ type Row = {
   priority: Priority;
   due_on: string | null;
   due_time: string | null;
+  completed_at: string | null;
 };
-const columns = 'id, title, course_id, kind, priority, due_on, due_time';
+const columns =
+  'id, title, course_id, kind, priority, due_on, due_time, completed_at';
 const toAssignment = (row: Row): Assignment => ({
   id: row.id,
   title: row.title,
@@ -31,6 +34,7 @@ const toAssignment = (row: Row): Assignment => ({
   priority: row.priority,
   dueDate: row.due_on,
   dueTime: row.due_time?.slice(0, 5) ?? null,
+  completedAt: row.completed_at,
 });
 function fail(error: PostgrestError): never {
   failLinked(error, 'assignment details');
@@ -178,4 +182,14 @@ export async function setAssignmentDue(
   input: Record<string, unknown>,
 ) {
   return updateAssignment(client, id, deadline(input.dueDate, input.dueTime));
+}
+
+/**
+ * Marks the task completed. The database records its own time and keeps the
+ * first completion, so repeating this changes nothing.
+ */
+export async function completeAssignment(client: SupabaseClient, id: string) {
+  return updateAssignment(client, id, {
+    completed_at: new Date().toISOString(),
+  });
 }

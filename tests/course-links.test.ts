@@ -54,6 +54,7 @@ test(
       priority: 'medium',
       dueDate: null,
       dueTime: null,
+      completedAt: null,
     });
     assert.deepEqual(await findStudySession(student, review.id), {
       id: review.id,

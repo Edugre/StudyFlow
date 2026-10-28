@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase.js';
 import { AuthGate } from '../auth/AuthGate.js';
 import { listCourses, type SavedCourse } from '../courses/course-api.js';
 import {
+  completeAssignment,
   createAssignment,
   findAssignment,
   listAssignments,
@@ -48,6 +49,7 @@ export function TasksPage() {
  * AT-04: each task is an assignment, exam, quiz, or project.
  * AT-05: each task has a Low, Medium, or High priority.
  * AT-03: each task can have a due date with an optional time.
+ * AT-06: a task can be marked completed, once.
  */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
@@ -211,6 +213,12 @@ function TaskList() {
               </button>{' '}
               <span className="tag">{optionLabel(task.kind)}</span>{' '}
               <span className="tag">{optionLabel(task.priority)} priority</span>
+              {task.completedAt && (
+                <>
+                  {' '}
+                  <span className="tag">Completed</span>
+                </>
+              )}
               {courseName(task) && ` — ${courseName(task)}`}
               {task.dueDate && ` — due ${dueText(task)}`}
             </li>
@@ -239,7 +247,29 @@ function TaskList() {
               <dt>Course</dt>
               <dd>{courseName(selected) ?? 'No course'}</dd>
             </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                {selected.completedAt
+                  ? `Completed on ${new Date(selected.completedAt).toLocaleString()}`
+                  : 'Not completed'}
+              </dd>
+            </div>
           </dl>
+          {!selected.completedAt && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                saveTask(
+                  () => completeAssignment(supabase, selected.id),
+                  'Task completed.',
+                )
+              }
+            >
+              {busy ? 'Saving…' : 'Mark completed'}
+            </button>
+          )}
           <label>
             Change type
             <select
