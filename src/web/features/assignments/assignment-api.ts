@@ -212,3 +212,15 @@ export async function editAssignment(
     ...deadline(input.dueDate, input.dueTime),
   });
 }
+
+/** AT-08: deletes one task; false when it doesn't exist or isn't the student's. */
+export async function deleteAssignment(client: SupabaseClient, id: string) {
+  if (!isId(id)) return false;
+  const { data, error } = await client
+    .from('assignments')
+    .delete()
+    .eq('id', id)
+    .select('id');
+  if (error) fail(error);
+  return data.length > 0;
+}
