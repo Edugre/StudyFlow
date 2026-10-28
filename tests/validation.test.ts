@@ -7,7 +7,10 @@ import {
   updateCourse,
   updateCourseField,
 } from '../src/web/features/courses/course-api.js';
-import { createAssignment } from '../src/web/features/assignments/assignment-api.js';
+import {
+  createAssignment,
+  setAssignmentKind,
+} from '../src/web/features/assignments/assignment-api.js';
 import {
   createStudySession,
   setStudySessionCourse,
@@ -85,6 +88,14 @@ test('coursework input is validated before reaching Supabase', async () => {
   await assert.rejects(
     createAssignment(offline, { title: 'Essay', courseId: 'not-a-uuid' }),
     /Course not found/,
+  );
+  await assert.rejects(
+    createAssignment(offline, { title: 'Essay', kind: 'homework' }),
+    /Choose assignment, exam, quiz, or project/,
+  );
+  await assert.rejects(
+    setAssignmentKind(offline, crypto.randomUUID(), 'homework'),
+    /Choose assignment, exam, quiz, or project/,
   );
   const valid = { date: '2026-11-02', startTime: '18:00', durationMinutes: 60 };
   for (const invalid of [

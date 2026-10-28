@@ -50,6 +50,7 @@ test(
       id: essay.id,
       title: 'Proof set',
       courseId: math.id,
+      kind: 'assignment',
     });
     assert.deepEqual(await findStudySession(student, review.id), {
       id: review.id,

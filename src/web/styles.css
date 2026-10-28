@@ -67,6 +67,12 @@ section {
   background: white;
   margin-top: 1rem;
 }
+.tag {
+  padding: 0 0.4rem;
+  border: 1px solid #d9e0e4;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+}
 .course-details {
   display: grid;
   gap: 0.5rem;
