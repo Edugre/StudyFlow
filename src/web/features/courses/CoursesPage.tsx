@@ -13,6 +13,16 @@ import {
   updateCourseField,
   type SavedCourse,
 } from './course-api.js';
+import { getCurrentSemester, setCurrentSemester } from './settings-api.js';
+
+/** Loads everything the signed-in workspace shows at once. */
+async function loadWorkspace() {
+  const [courses, currentSemester] = await Promise.all([
+    listCourses(supabase),
+    getCurrentSemester(supabase),
+  ]);
+  return { courses, currentSemester };
+}
 
 async function authenticate(mode: string, email: unknown, password: unknown) {
   if (
@@ -44,11 +54,13 @@ export function CoursesPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [semesterFilter, setSemesterFilter] = useState('');
+  const [currentSemester, setCurrent] = useState<string | null>(null);
+  // The current semester stays selectable even after its last course moves.
   const semesters = [
     ...new Set(
-      courses
-        .map((course) => course.semester)
-        .filter((semester): semester is string => Boolean(semester)),
+      [...courses.map((course) => course.semester), currentSemester].filter(
+        (semester): semester is string => Boolean(semester),
+      ),
     ),
   ].sort();
   const visibleCourses = semesterFilter
@@ -63,10 +75,10 @@ export function CoursesPage() {
       .getSession()
       .then(async ({ data }) => {
         const sessionUser = data.session?.user ?? null;
-        const saved = sessionUser ? await listCourses(supabase) : [];
+        const saved = sessionUser ? await loadWorkspace() : null;
         if (active) {
           setUser(sessionUser);
-          setCourses(saved);
+          if (saved) showWorkspace(saved);
           setReady(true);
         }
       })
@@ -80,6 +92,31 @@ export function CoursesPage() {
       active = false;
     };
   }, []);
+  function showWorkspace(saved: Awaited<ReturnType<typeof loadWorkspace>>) {
+    setCourses(saved.courses);
+    setCurrent(saved.currentSemester);
+    // CM-08: the list opens on the current semester when one is chosen.
+    setSemesterFilter(saved.currentSemester ?? '');
+  }
+  async function chooseCurrentSemester(value: string) {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const saved = await setCurrentSemester(supabase, value);
+      setCurrent(saved);
+      setSemesterFilter(saved ?? '');
+      opening.current = null;
+      setSelected(null);
+      setMessage(
+        saved ? 'Current semester saved.' : 'Current semester cleared.',
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
   function replaceCourse(course: SavedCourse) {
     setSelected(course);
     setCourses((previous) =>
@@ -192,7 +229,7 @@ export function CoursesPage() {
           setMode('login');
           return;
         }
-        setCourses(await listCourses(supabase));
+        showWorkspace(await loadWorkspace());
         setUser(signedIn);
       } else {
         const course = await createCourse(supabase, values);
@@ -221,6 +258,7 @@ export function CoursesPage() {
       setSelected(null);
       setMessage('');
       setSemesterFilter('');
+      setCurrent(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
@@ -327,6 +365,24 @@ export function CoursesPage() {
           </form>
           <h2>Saved courses</h2>
           <label>
+            Current semester
+            <select
+              value={currentSemester ?? ''}
+              disabled={busy}
+              onChange={(event) => chooseCurrentSemester(event.target.value)}
+            >
+              <option value="">Not chosen</option>
+              {semesters.map((semester) => (
+                <option key={semester} value={semester}>
+                  {semester}
+                </option>
+              ))}
+            </select>
+          </label>
+          {!currentSemester && semesters.length > 0 && (
+            <p>Choose your current semester to see only its courses.</p>
+          )}
+          <label>
             Filter by semester
             <select
               value={semesterFilter}
@@ -362,9 +418,11 @@ export function CoursesPage() {
             </ul>
           ) : (
             <p>
-              {semesterFilter
-                ? 'No courses in this semester.'
-                : 'No courses yet. Add your first course above.'}
+              {semesterFilter && semesterFilter === currentSemester
+                ? 'No courses in your current semester.'
+                : semesterFilter
+                  ? 'No courses in this semester.'
+                  : 'No courses yet. Add your first course above.'}
             </p>
           )}
           {selected && (

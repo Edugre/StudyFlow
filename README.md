@@ -36,7 +36,8 @@ only ever see and change their own records. See
 The app has `/` and `/courses`. Students can register, sign in/out, add a named
 course with optional code, instructor, semester and meetings, filter by
 semester, reopen to view full details (CM-09), edit (CM-02–06) and delete
-(CM-07) courses. The current-semester view remains CM-08 work.
+(CM-07) courses, and choose a current semester that the course list opens
+on (CM-08).
 
 See [authentication and course management](docs/authentication.md) for auth,
 security choices and the database contract.
