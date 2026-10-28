@@ -58,3 +58,33 @@ a course, empty filters, clearing, invalid labels/query parameters, account
 isolation and API/database restart. Other course fields and meetings are
 preserved. Build/type checking, lint and formatting pass. Team UI review remains
 pending for CM-02–05.
+
+## Vercel + Supabase migration — 2026-10-28
+
+- `npm run typecheck`, `npm run lint`, `npm run format:check` and `npm run build`
+  pass.
+- `npm test`: 2 offline tests pass (meeting and course-input validation). The 5
+  Supabase integration tests were **skipped**: Docker Desktop failed to start on
+  the development machine, so the local Supabase stack could not run.
+- The migration was executed in PGlite (Postgres 17 in WASM) with stubbed
+  `auth.users`, `auth.uid()` and the `anon`/`authenticated` roles. Checks passed
+  for trimming, constraints, the 100-meeting limit, atomic failed writes, RLS
+  isolation for select/update/delete/RPC, owner spoofing and transfer denial,
+  anonymous denial, full update and cascade delete.
+- Still to run with a working stack: `npm run db:test` (pgTAP), `npm test`
+  (integration), and a browser pass of sign-up/sign-in and course flows.
+
+### Hosted project — 2026-10-28
+
+- `supabase db push` applied `20261028000000_courses` to project
+  `jzruyssywoevtrjoumkr`; it is recorded in the migration history.
+- Verified catalog state: RLS on both tables, two owner policies,
+  `authenticated` has only SELECT on `id`/`owner_id`, `anon` has no table or
+  RPC privileges.
+- Ran the RLS, constraint, atomicity, owner-transfer, anonymous-access and
+  cascade checks as two simulated students inside a rolled-back block; all
+  passed and no rows remained.
+- Supabase security advisor: no findings. Performance advisor: only
+  "unused index" notices, expected on an empty database.
+- Integration tests now skip unless `VITE_SUPABASE_URL` is a local stack, so
+  `npm test` never creates accounts in the hosted project.

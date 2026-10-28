@@ -11,59 +11,54 @@ submissions can create separate courses because duplicate-course policy is open.
 The submit button is disabled while saving. Course codes, instructors, meetings,
 semesters, editing, deletion and cross-feature links remain separate stories.
 
-## API
+## Supabase Auth and data contract (since 2026-10-28)
 
-All POSTs require JSON and `X-StudyFlow-Request: 1`. No cross-origin access is
-enabled. The custom header and strict same-site cookies prevent cross-site form
-submissions from changing state. Frontend and API share an origin (or Vite proxy).
+Authentication uses Supabase Auth email/password (`signUp`,
+`signInWithPassword`, `signOut`). Passwords must be 12–128 characters
+(enforced in the form and by the project's minimum length setting). Emails are
+trimmed and lowercased before submission. Error messages stay generic
+("Email or password is incorrect.", "Unable to create account with these
+details."). Production requires email confirmation; after sign-up the UI asks
+the student to confirm, then sign in. Supabase Auth handles password hashing,
+session refresh and rate limiting.
 
-| Endpoint                  | Behavior                                                           |
-| ------------------------- | ------------------------------------------------------------------ |
-| POST `/api/auth/register` | Normalize email, hash password, create account and session         |
-| POST `/api/auth/login`    | Verify password, rotate session                                    |
-| GET `/api/auth/me`        | Current user or null                                               |
-| POST `/api/auth/logout`   | Revoke session and clear cookie                                    |
-| GET `/api/courses`        | All courses owned by authenticated student; no semester filter yet |
-| POST `/api/courses`       | Save validated name under session identity                         |
-| GET `/api/courses/:id`    | Reopen owned course; other accounts receive 404                    |
+Course data is accessed only through `src/web/features/courses/course-api.ts`:
 
-Passwords use Node asynchronous scrypt with random salts (N=32768, r=8, p=3).
-Session tokens contain 32 random bytes; only SHA-256 token digests are stored in
-SQLite. Cookies are HttpOnly and SameSite=Strict, expire after seven days, and
-use Secure when `NODE_ENV=production`. Logout revokes the stored session.
-All course queries scope by trusted session identity; submitted owner IDs are
-ignored. Queries use parameters. Auth responses and course responses disable
-caching. Login and registration are limited to 30 attempts per IP per 15 minutes
-in a single process; restart resets that limiter. Proxy deployment requires a
-review of client-IP handling and distributed rate limiting.
+| Function            | Database operation                                     |
+| ------------------- | ------------------------------------------------------ |
+| `listCourses`       | `select` on `courses` (+ meetings), optional semester  |
+| `findCourse`        | `select` one course; missing/other-owner/bad id → null |
+| `createCourse`      | RPC `create_course` (course + meetings, atomic)        |
+| `updateCourseField` | `update` code, instructor or semester only             |
+| `replaceMeetings`   | RPC `replace_course_meetings` (atomic, ≤100 rows)      |
+| `updateCourse`      | RPC `update_course` (CM-06, all fields + meetings)     |
+| `deleteCourse`      | `delete`; meetings cascade                             |
 
-Practical initial limits: passwords 12–128 characters, emails at most 254, course
-names at most 200. These are implementation choices to review with the team.
-Email verification, password reset, MFA, account deletion, and an external auth
-provider are not implemented. HTTPS is required for deployment. No secrets or
-sample credentials are committed.
+Security properties (verified by pgTAP and integration tests):
 
-## Persistence and migrations
+- RLS on `courses` and `course_meetings` limits every operation to
+  `auth.uid()`'s rows; other students' courses behave as not found.
+- `anon` has no table or function privileges.
+- `owner_id` defaults to `auth.uid()` and has no insert/update privilege for
+  clients, so ownership cannot be spoofed or transferred.
+- Names are trimmed (1–200 chars); blank semesters become null (≤100 chars);
+  codes and instructors are stored exactly; meetings are weekday + `time`
+  with end after start.
 
-Startup upgrades schema version 1 to 2 transactionally, adding users/sessions
-and a trigger requiring new courses to reference an existing user. Existing
-course/meeting data is preserved; legacy owner IDs are not reassigned. Future
-course editing must preserve ownership and scope writes. Do not replace a
-student's identity with a client-supplied field.
+Behavior differences from the Express version: the custom
+`X-StudyFlow-Request` header is gone (requests carry a bearer token, not a
+cookie, so cross-site form posts cannot act as the student); sessions are kept
+in `localStorage` (see [architecture](architecture.md) for the XSS trade-off);
+and the CM-06 "Edit course information" form no longer clears code, instructor
+and semester when saving name/location/notes.
 
-## Validation
+## History: Express + SQLite implementation (2026-10-02)
 
-`npm test` covers valid/invalid registration, duplicate normalized emails,
-incorrect passwords, cookie attributes, missing session denial, cross-site
-request protection, blank course rejection, single creation, list/reopening,
-owner spoofing, other-account denial, logout and expired sessions. Existing
-persistence tests cover reopening the SQLite file and preserving saved courses.
-Build/type checking, lint and formatting are run for this change. The sign-in
-interface was verified in the browser; account/course flows are covered by API
-integration tests rather than automated browser interaction.
-
-References: [Node crypto](https://nodejs.org/api/crypto.html) and
-[OWASP session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
+The original implementation used scrypt password hashes, SQLite sessions and
+an HttpOnly cookie behind an Express API. It was removed in the Supabase
+migration; see git history before branch `supabase-vercel-migration`. The
+per-story notes below describe product behavior, which is unchanged; references
+to POST routes and SQLite describe the old transport.
 
 ## Tracking
 
