@@ -10,6 +10,7 @@ import {
 import {
   createAssignment,
   editAssignment,
+  recordGrade,
   setAssignmentDue,
   setAssignmentKind,
   setAssignmentPriority,
@@ -140,6 +141,22 @@ test('coursework input is validated before reaching Supabase', async () => {
     await assert.rejects(
       editAssignment(offline, crypto.randomUUID(), { ...edit, ...invalid }),
       message,
+    );
+  for (const invalid of [
+    'abc',
+    '',
+    ' ',
+    '-1',
+    '100.01',
+    '101',
+    '1e2',
+    '92.555',
+    -5,
+    null,
+  ])
+    await assert.rejects(
+      recordGrade(offline, crypto.randomUUID(), invalid),
+      /Enter a grade from 0 to 100/,
     );
   const valid = { date: '2026-11-02', startTime: '18:00', durationMinutes: 60 };
   for (const invalid of [

@@ -16,6 +16,7 @@ import {
   editAssignment,
   findAssignment,
   listAssignments,
+  recordGrade,
 } from './assignment-api.js';
 
 const kindOptions = taskKinds.map((kind) => (
@@ -52,6 +53,7 @@ export function TasksPage() {
  * AT-07: every editable detail can be changed in one form, or cancelled.
  * AT-08: a task can be deleted after confirming.
  * AT-09: open tasks with future deadlines are listed earliest first.
+ * AT-10: a completed task can record a 0–100% grade.
  */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
@@ -138,6 +140,12 @@ function TaskList() {
       setEditing(false);
       return saved;
     }, 'Task saved.');
+  }
+
+  function saveGrade(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    saveTask(() => recordGrade(supabase, id, values.grade), 'Grade saved.');
   }
 
   function deleteTask(task: Assignment) {
@@ -298,7 +306,35 @@ function TaskList() {
                   : 'Not completed'}
               </dd>
             </div>
+            {selected.completedAt && (
+              <div>
+                <dt>Grade</dt>
+                <dd>
+                  {selected.grade === null ? 'No grade' : `${selected.grade}%`}
+                </dd>
+              </div>
+            )}
           </dl>
+          {selected.completedAt && (
+            <form
+              onSubmit={(event) => saveGrade(event, selected.id)}
+              key={`${selected.id}:grade:${selected.grade}`}
+            >
+              <label>
+                Grade (%)
+                <input
+                  name="grade"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  required
+                  defaultValue={selected.grade ?? ''}
+                />
+              </label>
+              <button disabled={busy}>{busy ? 'Saving…' : 'Save grade'}</button>
+            </form>
+          )}
           {!selected.completedAt && (
             <button
               type="button"

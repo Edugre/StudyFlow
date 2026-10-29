@@ -11,8 +11,8 @@ import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 
 /**
  * Assignment data access (AT-01) with course links (CM-10, AT-02) and
- * task types (AT-04), priorities (AT-05), deadlines (AT-03) and completion
- * (AT-06). Ownership is enforced by row level security.
+ * task types (AT-04), priorities (AT-05), deadlines (AT-03), completion
+ * (AT-06) and grades (AT-10). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
@@ -23,9 +23,10 @@ type Row = {
   due_on: string | null;
   due_time: string | null;
   completed_at: string | null;
+  grade: number | string | null;
 };
 const columns =
-  'id, title, course_id, kind, priority, due_on, due_time, completed_at';
+  'id, title, course_id, kind, priority, due_on, due_time, completed_at, grade';
 const toAssignment = (row: Row): Assignment => ({
   id: row.id,
   title: row.title,
@@ -35,6 +36,8 @@ const toAssignment = (row: Row): Assignment => ({
   dueDate: row.due_on,
   dueTime: row.due_time?.slice(0, 5) ?? null,
   completedAt: row.completed_at,
+  // Postgres numeric may arrive as a string.
+  grade: row.grade === null ? null : Number(row.grade),
 });
 function fail(error: PostgrestError): never {
   failLinked(error, 'assignment details');
@@ -223,4 +226,42 @@ export async function deleteAssignment(client: SupabaseClient, id: string) {
     .select('id');
   if (error) fail(error);
   return data.length > 0;
+}
+
+export const gradeError = 'Enter a grade from 0 to 100.';
+
+/** A percentage from 0 through 100 with at most two decimals. */
+function grade(value: unknown) {
+  const text = typeof value === 'number' ? String(value) : value;
+  if (typeof text !== 'string' || !/^\d{1,3}(\.\d{1,2})?$/.test(text.trim()))
+    throw new Error(gradeError);
+  const parsed = Number(text);
+  if (parsed > 100) throw new Error(gradeError);
+  return parsed;
+}
+
+/**
+ * AT-10: records or replaces the grade of a completed task. Invalid grades
+ * are rejected before the request, so the saved grade stays.
+ */
+export async function recordGrade(
+  client: SupabaseClient,
+  id: string,
+  value: unknown,
+) {
+  const update = { grade: grade(value) };
+  if (!isId(id)) throw new Error('Assignment not found');
+  const { data, error } = await client
+    .from('assignments')
+    .update(update)
+    .eq('id', id)
+    .not('completed_at', 'is', null)
+    .select(columns);
+  if (error) fail(error);
+  const [row] = data as Row[];
+  if (row) return toAssignment(row);
+  // Nothing matched: either the task is still open, or it isn't the student's.
+  if (await findAssignment(client, id))
+    throw new Error('Mark the task completed before recording a grade.');
+  throw new Error('Assignment not found');
 }
