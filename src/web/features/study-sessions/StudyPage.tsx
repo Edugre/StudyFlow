@@ -11,6 +11,7 @@ import {
   completedCount,
   durationText,
   plannedMinutes,
+  scheduled,
   type StudySession,
 } from '../../../shared/study-session.js';
 import { supabase } from '../../lib/supabase.js';
@@ -18,6 +19,7 @@ import { listAssignments } from '../assignments/assignment-api.js';
 import { AuthGate } from '../auth/AuthGate.js';
 import { listCourses, type SavedCourse } from '../courses/course-api.js';
 import {
+  cancelStudySession,
   completeStudySession,
   createStudySession,
   editStudySession,
@@ -132,6 +134,8 @@ function SessionFields({
  * SP-07: every detail of a session can be changed in one form, or cancelled.
  * SP-09: a session can be marked completed, once, and the schedule shows how
  * many sessions are completed.
+ * SP-08: a session can be canceled after confirming; it leaves the schedule
+ * and planned study time but stays saved, listed under canceled sessions.
  */
 function Schedule() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -214,6 +218,19 @@ function Schedule() {
     });
   }
 
+  // Dismissing the confirmation sends nothing, so the session stays scheduled.
+  function cancelSession(session: StudySession) {
+    const confirmed = window.confirm(
+      `Cancel the study session on ${whenText(session)}? It will be removed from your schedule. This can't be undone.`,
+    );
+    if (!confirmed) return;
+    void run(async () => {
+      setEditing(false);
+      showSaved(await cancelStudySession(supabase, session.id));
+      return 'Study session canceled.';
+    });
+  }
+
   /**
    * Saves the whole edit form to the same session, so no duplicate is
    * created, and the schedule re-sorts. If anything is invalid, nothing is
@@ -280,6 +297,9 @@ function Schedule() {
     </>
   );
 
+  const inSchedule = scheduled(sessions);
+  const canceled = sessions.filter((session) => session.canceledAt);
+
   return (
     <>
       {error && <p role="alert">{error}</p>}
@@ -297,12 +317,12 @@ function Schedule() {
       <h2>Your schedule</h2>
       {!loaded ? (
         !error && <p>Loading study sessions…</p>
-      ) : sessions.length ? (
+      ) : inSchedule.length ? (
         <>
           <p>Planned study time: {durationText(plannedMinutes(sessions))}</p>
           <p>Completed sessions: {completedCount(sessions)}</p>
           <ol>
-            {sessions.map((session) => (
+            {inSchedule.map((session) => (
               <li key={session.id}>
                 <button disabled={busy} onClick={() => reopen(session.id)}>
                   {whenText(session)}
@@ -321,7 +341,22 @@ function Schedule() {
           </ol>
         </>
       ) : (
-        <p>No study sessions yet. Add your first session above.</p>
+        <p>No study sessions scheduled. Add a session above.</p>
+      )}
+      {canceled.length > 0 && (
+        <>
+          <h2>Canceled sessions</h2>
+          <ul>
+            {canceled.map((session) => (
+              <li key={session.id}>
+                <button disabled={busy} onClick={() => reopen(session.id)}>
+                  {whenText(session)}
+                </button>
+                {courseName(session) && ` — ${courseName(session)}`}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {selected && (
         <section aria-label="Selected study session">
@@ -360,20 +395,31 @@ function Schedule() {
               <dd>
                 {selected.completedAt
                   ? `Completed on ${new Date(selected.completedAt).toLocaleString()}`
-                  : 'Not completed'}
+                  : selected.canceledAt
+                    ? `Canceled on ${new Date(selected.canceledAt).toLocaleString()}`
+                    : 'Scheduled'}
               </dd>
             </div>
           </dl>
-          {!selected.completedAt && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => complete(selected.id)}
-            >
-              {busy ? 'Saving…' : 'Mark completed'}
-            </button>
+          {!selected.completedAt && !selected.canceledAt && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => complete(selected.id)}
+              >
+                {busy ? 'Saving…' : 'Mark completed'}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => cancelSession(selected)}
+              >
+                Cancel study session
+              </button>
+            </>
           )}
-          {editing ? (
+          {selected.canceledAt ? null : editing ? (
             <form
               onSubmit={(event) => saveEdit(event, selected.id)}
               aria-label="Edit study session"

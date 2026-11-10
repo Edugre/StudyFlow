@@ -49,7 +49,9 @@ optional objective (SP-06) and prepare for one of the student's tasks (SP-03):
 when both have a course they must agree, and moving a task to another course
 moves its sessions with it. All of a session's details are changed in one
 edit form that can be cancelled (SP-07), and a session can be marked
-completed once, with the count of completed sessions shown (SP-09).
+completed once, with the count of completed sessions shown (SP-09), or
+canceled after confirming, which moves it out of the schedule and planned
+time into a canceled list (SP-08).
 
 See [authentication and course management](docs/authentication.md) for auth,
 security choices and the database contract.

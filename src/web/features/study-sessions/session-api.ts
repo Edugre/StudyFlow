@@ -7,7 +7,7 @@ import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
  * Study session data access (SP-01) with course links (CM-10, SP-02),
  * rescheduling (SP-04), durations (SP-05), objectives (SP-06) and task
  * links (SP-03), all editable together in one form (SP-07), and
- * completion (SP-09). Ownership is
+ * completion (SP-09) and cancellation (SP-08). Ownership is
  * enforced by row level security.
  */
 type Row = {
@@ -19,9 +19,10 @@ type Row = {
   objective: string | null;
   assignment_id: string | null;
   completed_at: string | null;
+  canceled_at: string | null;
 };
 const columns =
-  'id, course_id, starts_on, start_time, duration_minutes, objective, assignment_id, completed_at';
+  'id, course_id, starts_on, start_time, duration_minutes, objective, assignment_id, completed_at, canceled_at';
 const toSession = (row: Row): StudySession => ({
   id: row.id,
   courseId: row.course_id,
@@ -31,6 +32,7 @@ const toSession = (row: Row): StudySession => ({
   objective: row.objective,
   assignmentId: row.assignment_id,
   completedAt: row.completed_at,
+  canceledAt: row.canceled_at,
 });
 export const taskCourseError =
   "This task belongs to another course. Give the session the task's course, or no course.";
@@ -239,12 +241,58 @@ export async function editStudySession(
 }
 
 /**
+ * Sets a status column on a session unless it already has the other status:
+ * a session is completed or canceled, never both. The database keeps the
+ * first time either was set, so repeating this changes nothing.
+ */
+async function setStatus(
+  client: SupabaseClient,
+  id: string,
+  status: 'completed_at' | 'canceled_at',
+  blockedBy: 'completed_at' | 'canceled_at',
+  blocked: string,
+) {
+  if (!isId(id)) throw new Error('Study session not found');
+  const { data, error } = await client
+    .from('study_sessions')
+    .update({ [status]: new Date().toISOString() })
+    .eq('id', id)
+    .is(blockedBy, null)
+    .select(columns);
+  if (error) fail(error);
+  const [row] = data as Row[];
+  if (row) return toSession(row);
+  // Nothing matched: either it has the other status, or it isn't the student's.
+  if (await findStudySession(client, id)) throw new Error(blocked);
+  throw new Error('Study session not found');
+}
+
+/**
  * SP-09: marks the session completed. The database records its own time and
  * keeps the first completion, so repeating this changes nothing and the
- * session is counted once.
+ * session is counted once. Canceled sessions (SP-08) can't be completed.
  */
 export async function completeStudySession(client: SupabaseClient, id: string) {
-  return updateStudySession(client, id, {
-    completed_at: new Date().toISOString(),
-  });
+  return setStatus(
+    client,
+    id,
+    'completed_at',
+    'canceled_at',
+    "A canceled study session can't be completed.",
+  );
+}
+
+/**
+ * SP-08: cancels the session. It stays saved but leaves the schedule and
+ * planned study time. Canceling again changes nothing, it can't be undone,
+ * and completed sessions (SP-09) can't be canceled.
+ */
+export async function cancelStudySession(client: SupabaseClient, id: string) {
+  return setStatus(
+    client,
+    id,
+    'canceled_at',
+    'completed_at',
+    "A completed study session can't be canceled.",
+  );
 }

@@ -5,6 +5,7 @@ import {
   completedCount,
   durationText,
   plannedMinutes,
+  scheduled,
   type StudySession,
 } from '../src/shared/study-session.js';
 import {
@@ -15,6 +16,7 @@ import {
 } from '../src/web/features/assignments/assignment-api.js';
 import { createCourse } from '../src/web/features/courses/course-api.js';
 import {
+  cancelStudySession,
   completeStudySession,
   createStudySession,
   editStudySession,
@@ -41,6 +43,7 @@ const session = (
   objective: null,
   assignmentId: null,
   completedAt: null,
+  canceledAt: null,
 });
 
 test('SP-01: the schedule lists sessions earliest first', () => {
@@ -75,6 +78,7 @@ test(
       objective: null,
       assignmentId: null,
       completedAt: null,
+      canceledAt: null,
     });
     const schedule = await listStudySessions(student);
     assert.deepEqual(schedule, [saved]);
@@ -564,6 +568,7 @@ test(
       assignmentId: lab.id,
       objective: 'Write the methods section',
       completedAt: null,
+      canceledAt: null,
     };
     assert.deepEqual(edited, expected);
     assert.deepEqual(await findStudySession(student, saved.id), expected);
@@ -678,5 +683,78 @@ test(
       /Study session not found/,
     );
     assert.equal((await findStudySession(owner, saved.id))?.completedAt, null);
+  },
+);
+
+test('SP-08: canceled sessions leave the schedule and planned time', () => {
+  const sessions = [
+    { ...session('kept', '2026-11-12', '09:00'), durationMinutes: 60 },
+    {
+      ...session('canceled', '2026-11-12', '18:00'),
+      durationMinutes: 30,
+      canceledAt: '2026-11-10T12:00:00Z',
+    },
+  ];
+  assert.deepEqual(
+    scheduled(sessions).map((s) => s.id),
+    ['kept'],
+  );
+  assert.equal(plannedMinutes(sessions), 60);
+});
+
+test(
+  'SP-08: a canceled session leaves the schedule but stays saved',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const kept = await createStudySession(student, slot);
+    const dropped = await createStudySession(student, {
+      ...slot,
+      startTime: '20:00',
+      durationMinutes: 30,
+    });
+
+    const canceled = await cancelStudySession(student, dropped.id);
+    assert.notEqual(canceled.canceledAt, null);
+    assert.deepEqual(canceled, { ...dropped, canceledAt: canceled.canceledAt });
+    assert.deepEqual(await findStudySession(student, dropped.id), canceled);
+
+    const all = await listStudySessions(student);
+    assert.equal(all.length, 2);
+    assert.deepEqual(scheduled(all), [kept]);
+    assert.equal(plannedMinutes(all), 60);
+    assert.equal(completedCount(all), 0);
+
+    // Canceling again keeps the first cancellation.
+    const again = await cancelStudySession(student, dropped.id);
+    assert.equal(again.canceledAt, canceled.canceledAt);
+  },
+);
+
+test(
+  'SP-08: completed and canceled sessions exclude each other',
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const done = await createStudySession(owner, slot);
+    const dropped = await createStudySession(owner, slot);
+    const completed = await completeStudySession(owner, done.id);
+    const canceled = await cancelStudySession(owner, dropped.id);
+
+    await assert.rejects(
+      cancelStudySession(owner, done.id),
+      /completed study session can't be canceled/,
+    );
+    await assert.rejects(
+      completeStudySession(owner, dropped.id),
+      /canceled study session can't be completed/,
+    );
+    await assert.rejects(
+      cancelStudySession(other, done.id),
+      /Study session not found/,
+    );
+    assert.deepEqual(await findStudySession(owner, done.id), completed);
+    assert.deepEqual(await findStudySession(owner, dropped.id), canceled);
   },
 );
