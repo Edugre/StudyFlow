@@ -11,6 +11,7 @@ import {
   findStudySession,
   listStudySessions,
   setStudySessionCourse,
+  setStudySessionSchedule,
 } from './session-api.js';
 
 export function StudyPage() {
@@ -31,6 +32,7 @@ const whenText = (session: StudySession) =>
  * a new one with a date, start time and duration.
  * SP-02: each session can be linked to one of the student's courses, and
  * moved to another course from its details.
+ * SP-04: a session can be moved to a new date and start time in place.
  */
 function Schedule() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -94,18 +96,41 @@ function Schedule() {
     });
   }
 
-  // Updates the same session in place, so no duplicate is created.
+  /**
+   * Saves a change to the open session. It updates the same session in
+   * place, so no duplicate is created, and the schedule re-sorts.
+   */
+  function saveSession(save: () => Promise<StudySession>, done: string) {
+    void run(async () => {
+      const saved = await save();
+      setSessions((previous) =>
+        bySchedule(
+          previous.map((session) =>
+            session.id === saved.id ? saved : session,
+          ),
+        ),
+      );
+      setSelected(saved);
+      return done;
+    });
+  }
+
   function moveSession(event: FormEvent<HTMLFormElement>, id: string) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    void run(async () => {
-      const saved = await setStudySessionCourse(supabase, id, values.courseId);
-      setSessions((previous) =>
-        previous.map((session) => (session.id === saved.id ? saved : session)),
-      );
-      setSelected(saved);
-      return 'Course saved.';
-    });
+    saveSession(
+      () => setStudySessionCourse(supabase, id, values.courseId),
+      'Course saved.',
+    );
+  }
+
+  function reschedule(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    saveSession(
+      () => setStudySessionSchedule(supabase, id, values),
+      'Date and time saved.',
+    );
   }
 
   async function reopen(id: string) {
@@ -210,6 +235,32 @@ function Schedule() {
               <dd>{courseName(selected) ?? 'No course'}</dd>
             </div>
           </dl>
+          <form
+            onSubmit={(event) => reschedule(event, selected.id)}
+            key={`${selected.id}:when:${selected.date}:${selected.startTime}`}
+          >
+            <label>
+              Date
+              <input
+                name="date"
+                type="date"
+                required
+                defaultValue={selected.date}
+              />
+            </label>
+            <label>
+              Start time
+              <input
+                name="startTime"
+                type="time"
+                required
+                defaultValue={selected.startTime}
+              />
+            </label>
+            <button disabled={busy}>
+              {busy ? 'Saving…' : 'Save date and time'}
+            </button>
+          </form>
           <form
             onSubmit={(event) => moveSession(event, selected.id)}
             key={`${selected.id}:course:${selected.courseId}`}

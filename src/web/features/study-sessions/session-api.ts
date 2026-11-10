@@ -4,8 +4,8 @@ import type { StudySession } from '../../../shared/study-session.js';
 import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 
 /**
- * Minimal study session data access (SP-01) with course links (CM-10, SP-02).
- * Ownership is enforced by row level security, as for courses.
+ * Study session data access (SP-01) with course links (CM-10, SP-02) and
+ * rescheduling (SP-04). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
@@ -92,21 +92,49 @@ export async function findStudySession(client: SupabaseClient, id: string) {
   return data ? toSession(data) : null;
 }
 
-/** Links the session to another course, or unlinks it with null. */
-export async function setStudySessionCourse(
+/** Updates only the given columns of one session; nothing is duplicated. */
+async function updateStudySession(
   client: SupabaseClient,
   id: string,
-  courseId: unknown,
+  update: Partial<Omit<Row, 'id'>>,
 ) {
-  const course_id = courseLink(courseId);
   if (!isId(id)) throw new Error('Study session not found');
   const { data, error } = await client
     .from('study_sessions')
-    .update({ course_id })
+    .update(update)
     .eq('id', id)
     .select(columns);
   if (error) fail(error);
   const [row] = data as Row[];
   if (!row) throw new Error('Study session not found');
   return toSession(row);
+}
+
+/** Links the session to another course, or unlinks it with null. */
+export async function setStudySessionCourse(
+  client: SupabaseClient,
+  id: string,
+  courseId: unknown,
+) {
+  return updateStudySession(client, id, { course_id: courseLink(courseId) });
+}
+
+export const rescheduleError = 'Enter a valid date and a start time (HH:MM).';
+
+/**
+ * SP-04: moves the session to a new date and start time in place, so no
+ * copy remains at the old time. Its duration and course stay as saved.
+ * Invalid input is rejected before the request, so the saved time stays.
+ */
+export async function setStudySessionSchedule(
+  client: SupabaseClient,
+  id: string,
+  input: Record<string, unknown>,
+) {
+  const { date, startTime } = input;
+  if (!isDate(date) || !isTime(startTime)) throw new Error(rescheduleError);
+  return updateStudySession(client, id, {
+    starts_on: date,
+    start_time: startTime,
+  });
 }
