@@ -14,6 +14,11 @@ const TasksPage = lazy(() =>
     default: module.TasksPage,
   })),
 );
+const StudyPage = lazy(() =>
+  import('./features/study-sessions/StudyPage.js').then((module) => ({
+    default: module.StudyPage,
+  })),
+);
 const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL &&
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -42,6 +47,7 @@ createRoot(document.getElementById('root')!).render(
         <nav aria-label="Main navigation">
           <Link to="/courses">Courses</Link>
           <Link to="/tasks">Tasks</Link>
+          <Link to="/study">Study</Link>
         </nav>
       </header>
       <main>
@@ -71,6 +77,14 @@ createRoot(document.getElementById('root')!).render(
             element={
               <Workspace name="Tasks">
                 <TasksPage />
+              </Workspace>
+            }
+          />
+          <Route
+            path="/study"
+            element={
+              <Workspace name="Study sessions">
+                <StudyPage />
               </Workspace>
             }
           />

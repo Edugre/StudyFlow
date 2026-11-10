@@ -13,9 +13,11 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      # A pinned version downloads directly; "latest" needs a GitHub API
+      # lookup that fails when the API rate limit is hit.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.122.0
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint

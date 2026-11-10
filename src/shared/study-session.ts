@@ -8,3 +8,9 @@ export interface StudySession {
   startTime: string;
   durationMinutes: number;
 }
+
+/** Schedule order: earliest date and start time first; ties keep saved order. */
+export const bySchedule = (sessions: StudySession[]) =>
+  [...sessions].sort((a, b) =>
+    `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`),
+  );

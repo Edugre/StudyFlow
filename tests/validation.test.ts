@@ -172,6 +172,7 @@ test('coursework input is validated before reaching Supabase', async () => {
     { ...valid, durationMinutes: 1.5 },
     { ...valid, durationMinutes: 1441 },
     { ...valid, durationMinutes: '60' },
+    { ...valid, durationMinutes: NaN },
   ])
     await assert.rejects(
       createStudySession(offline, invalid),
