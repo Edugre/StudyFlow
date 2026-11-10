@@ -41,7 +41,8 @@ on (CM-08). From a course's details they can add assignments and study
 sessions linked to it and move them between courses (CM-10, with minimal
 AT-01/SP-01). Deleting a course keeps its coursework, unlinked. `/tasks` holds
 the task list (AT-01–AT-10), and `/study` lists every study session in
-schedule order with a form to add one (SP-01).
+schedule order with a form to add one (SP-01); a session can be linked to a
+course and moved to another from its details (SP-02).
 
 See [authentication and course management](docs/authentication.md) for auth,
 security choices and the database contract.

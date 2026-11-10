@@ -1,11 +1,17 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   bySchedule,
   type StudySession,
 } from '../../../shared/study-session.js';
 import { supabase } from '../../lib/supabase.js';
 import { AuthGate } from '../auth/AuthGate.js';
-import { createStudySession, listStudySessions } from './session-api.js';
+import { listCourses, type SavedCourse } from '../courses/course-api.js';
+import {
+  createStudySession,
+  findStudySession,
+  listStudySessions,
+  setStudySessionCourse,
+} from './session-api.js';
 
 export function StudyPage() {
   return (
@@ -23,20 +29,27 @@ const whenText = (session: StudySession) =>
 /**
  * SP-01: the student's schedule of study sessions, and a form to reserve
  * a new one with a date, start time and duration.
+ * SP-02: each session can be linked to one of the student's courses, and
+ * moved to another course from its details.
  */
 function Schedule() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [courses, setCourses] = useState<SavedCourse[]>([]);
+  const [selected, setSelected] = useState<StudySession | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  // The most recently opened session id; older responses are discarded.
+  const opening = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    listStudySessions(supabase)
-      .then((saved) => {
+    Promise.all([listStudySessions(supabase), listCourses(supabase)])
+      .then(([savedSessions, savedCourses]) => {
         if (!active) return;
-        setSessions(saved);
+        setSessions(savedSessions);
+        setCourses(savedCourses);
         setLoaded(true);
       })
       .catch((e) => {
@@ -47,30 +60,82 @@ function Schedule() {
     };
   }, []);
 
+  async function run(action: () => Promise<string>) {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      setMessage(await action());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function addSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form));
-    setBusy(true);
-    setError('');
-    setMessage('');
     // Invalid input is rejected before the request, so nothing is created.
-    createStudySession(supabase, {
-      date: values.date,
-      startTime: values.startTime,
-      durationMinutes:
-        values.durationMinutes === '' ? NaN : Number(values.durationMinutes),
-    })
-      .then((saved) => {
-        setSessions((previous) => bySchedule([...previous, saved]));
-        form.reset();
-        setMessage('Study session saved.');
-      })
-      .catch((e) => {
-        setError(e instanceof Error ? e.message : 'Request failed');
-      })
-      .finally(() => setBusy(false));
+    void run(async () => {
+      const saved = await createStudySession(supabase, {
+        date: values.date,
+        startTime: values.startTime,
+        durationMinutes:
+          values.durationMinutes === '' ? NaN : Number(values.durationMinutes),
+        courseId: values.courseId,
+      });
+      setSessions((previous) => bySchedule([...previous, saved]));
+      opening.current = null;
+      setSelected(saved);
+      form.reset();
+      return 'Study session saved.';
+    });
   }
+
+  // Updates the same session in place, so no duplicate is created.
+  function moveSession(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    void run(async () => {
+      const saved = await setStudySessionCourse(supabase, id, values.courseId);
+      setSessions((previous) =>
+        previous.map((session) => (session.id === saved.id ? saved : session)),
+      );
+      setSelected(saved);
+      return 'Course saved.';
+    });
+  }
+
+  async function reopen(id: string) {
+    opening.current = id;
+    setError('');
+    setSelected(null);
+    try {
+      const session = await findStudySession(supabase, id);
+      if (opening.current !== id) return;
+      if (!session) throw new Error('Study session not found');
+      setSelected(session);
+    } catch (e) {
+      if (opening.current !== id) return;
+      setError(e instanceof Error ? e.message : 'Request failed');
+    }
+  }
+
+  const courseName = (session: StudySession) =>
+    courses.find((course) => course.id === session.courseId)?.name ?? null;
+
+  const courseOptions = (
+    <>
+      <option value="">No course</option>
+      {courses.map((course) => (
+        <option key={course.id} value={course.id}>
+          {course.name}
+        </option>
+      ))}
+    </>
+  );
 
   return (
     <>
@@ -97,6 +162,12 @@ function Schedule() {
             required
           />
         </label>
+        <label>
+          Course (optional)
+          <select name="courseId" defaultValue="">
+            {courseOptions}
+          </select>
+        </label>
         <button disabled={busy}>
           {busy ? 'Saving…' : 'Add study session'}
         </button>
@@ -107,11 +178,51 @@ function Schedule() {
       ) : sessions.length ? (
         <ol>
           {sessions.map((session) => (
-            <li key={session.id}>{whenText(session)}</li>
+            <li key={session.id}>
+              <button disabled={busy} onClick={() => reopen(session.id)}>
+                {whenText(session)}
+              </button>
+              {courseName(session) && ` — ${courseName(session)}`}
+            </li>
           ))}
         </ol>
       ) : (
         <p>No study sessions yet. Add your first session above.</p>
+      )}
+      {selected && (
+        <section aria-label="Selected study session">
+          <h2>Study session on {whenText(selected)}</h2>
+          <dl className="course-details">
+            <div>
+              <dt>Date</dt>
+              <dd>{selected.date}</dd>
+            </div>
+            <div>
+              <dt>Start time</dt>
+              <dd>{selected.startTime}</dd>
+            </div>
+            <div>
+              <dt>Duration</dt>
+              <dd>{selected.durationMinutes} minutes</dd>
+            </div>
+            <div>
+              <dt>Course</dt>
+              <dd>{courseName(selected) ?? 'No course'}</dd>
+            </div>
+          </dl>
+          <form
+            onSubmit={(event) => moveSession(event, selected.id)}
+            key={`${selected.id}:course:${selected.courseId}`}
+          >
+            <label>
+              Course
+              <select name="courseId" defaultValue={selected.courseId ?? ''}>
+                {courseOptions}
+              </select>
+            </label>
+            <button disabled={busy}>{busy ? 'Saving…' : 'Save course'}</button>
+          </form>
+        </section>
       )}
     </>
   );

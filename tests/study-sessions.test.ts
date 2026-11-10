@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { bySchedule, type StudySession } from '../src/shared/study-session.js';
+import { createCourse } from '../src/web/features/courses/course-api.js';
 import {
   createStudySession,
   findStudySession,
   listStudySessions,
+  setStudySessionCourse,
 } from '../src/web/features/study-sessions/session-api.js';
 import { account, stack } from './support/supabase.js';
 
@@ -90,5 +92,75 @@ test(
     });
     assert.equal(await findStudySession(other, saved.id), null);
     assert.deepEqual(await listStudySessions(other), []);
+  },
+);
+
+const slot = { date: '2026-11-12', startTime: '18:00', durationMinutes: 60 };
+
+test(
+  'SP-02: a session keeps its course after reopening',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const saved = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+    });
+    assert.equal(saved.courseId, math.id);
+    assert.equal(
+      (await findStudySession(student, saved.id))?.courseId,
+      math.id,
+    );
+  },
+);
+
+test(
+  'SP-02: reassigning a session updates it without a duplicate',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const physics = await createCourse(student, { name: 'Physics' });
+    const saved = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+    });
+
+    const moved = await setStudySessionCourse(student, saved.id, physics.id);
+    assert.deepEqual(moved, { ...saved, courseId: physics.id });
+    assert.deepEqual(await listStudySessions(student), [moved]);
+    assert.deepEqual(await findStudySession(student, saved.id), moved);
+
+    // Choosing "No course" unlinks it, still without a duplicate.
+    await setStudySessionCourse(student, saved.id, '');
+    assert.deepEqual(await listStudySessions(student), [
+      { ...saved, courseId: null },
+    ]);
+  },
+);
+
+test(
+  "SP-02: a session cannot be moved to another student's course",
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const math = await createCourse(owner, { name: 'Math' });
+    const theirs = await createCourse(other, { name: 'History' });
+    const saved = await createStudySession(owner, {
+      ...slot,
+      courseId: math.id,
+    });
+
+    await assert.rejects(
+      setStudySessionCourse(owner, saved.id, theirs.id),
+      /Course not found/,
+    );
+    await assert.rejects(
+      setStudySessionCourse(other, saved.id, theirs.id),
+      /Study session not found/,
+    );
+    assert.equal((await findStudySession(owner, saved.id))?.courseId, math.id);
   },
 );
