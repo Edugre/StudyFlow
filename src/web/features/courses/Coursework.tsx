@@ -1,6 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { optionLabel, type Assignment } from '../../../shared/assignment.js';
-import type { StudySession } from '../../../shared/study-session.js';
+import {
+  bySchedule,
+  type StudySession,
+} from '../../../shared/study-session.js';
 import { supabase } from '../../lib/supabase.js';
 import {
   createAssignment,
@@ -89,11 +92,7 @@ export function Coursework({
         durationMinutes: Number(values.durationMinutes),
         courseId: course.id,
       });
-      setSessions((previous) =>
-        [...previous, saved].sort((a, b) =>
-          (a.date + a.startTime).localeCompare(b.date + b.startTime),
-        ),
-      );
+      setSessions((previous) => bySchedule([...previous, saved]));
       form.reset();
       return 'Study session saved.';
     });
