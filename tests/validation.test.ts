@@ -18,6 +18,7 @@ import {
 import {
   createStudySession,
   setStudySessionCourse,
+  setStudySessionDuration,
   setStudySessionSchedule,
 } from '../src/web/features/study-sessions/session-api.js';
 import { setCurrentSemester } from '../src/web/features/courses/settings-api.js';
@@ -202,4 +203,10 @@ test('coursework input is validated before reaching Supabase', async () => {
     }),
     /Study session not found/,
   );
+  for (const invalid of [0, -1, 2.5, NaN, '60', undefined, 1441])
+    await assert.rejects(
+      setStudySessionDuration(offline, crypto.randomUUID(), invalid),
+      /duration of 1–1440 whole minutes/,
+      String(invalid),
+    );
 });
