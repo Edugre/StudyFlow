@@ -178,7 +178,8 @@ export function Coursework({
           {sessions.length ? (
             <ul>
               {sessions.map((session) => {
-                const when = `${session.date} ${session.startTime} (${session.durationMinutes} min)`;
+                // Canceled sessions (SP-08) stay listed, marked as canceled.
+                const when = `${session.date} ${session.startTime} (${session.durationMinutes} min)${session.canceledAt ? ' — canceled' : ''}`;
                 return (
                   <li key={session.id}>
                     {when}

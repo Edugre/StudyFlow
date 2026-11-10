@@ -13,6 +13,8 @@ export interface StudySession {
   assignmentId: string | null;
   /** SP-09: when the session was marked completed, or null while unfinished. */
   completedAt: string | null;
+  /** SP-08: when the session was canceled, or null while it is scheduled. */
+  canceledAt: string | null;
 }
 
 /** Schedule order: earliest date and start time first; ties keep saved order. */
@@ -21,9 +23,19 @@ export const bySchedule = (sessions: StudySession[]) =>
     `${a.date} ${a.startTime}`.localeCompare(`${b.date} ${b.startTime}`),
   );
 
-/** SP-05: the planned study time of these sessions, in minutes. */
+/** SP-08: the sessions that are still in the schedule (not canceled). */
+export const scheduled = (sessions: StudySession[]) =>
+  sessions.filter((session) => !session.canceledAt);
+
+/**
+ * SP-05: the planned study time of these sessions, in minutes. Canceled
+ * sessions (SP-08) are left out, as GP-08 requires.
+ */
 export const plannedMinutes = (sessions: StudySession[]) =>
-  sessions.reduce((total, session) => total + session.durationMinutes, 0);
+  scheduled(sessions).reduce(
+    (total, session) => total + session.durationMinutes,
+    0,
+  );
 
 /** 195 → "3 h 15 min", 60 → "1 h", 45 → "45 min", 0 → "0 min". */
 export function durationText(minutes: number) {

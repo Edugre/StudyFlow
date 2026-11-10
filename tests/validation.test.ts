@@ -16,6 +16,8 @@ import {
   setAssignmentPriority,
 } from '../src/web/features/assignments/assignment-api.js';
 import {
+  cancelStudySession,
+  completeStudySession,
   createStudySession,
   editStudySession,
   setStudySessionCourse,
@@ -241,5 +243,10 @@ test('coursework input is validated before reaching Supabase', async () => {
       editStudySession(offline, crypto.randomUUID(), invalid),
       /valid date|500 characters|not found/,
       JSON.stringify(invalid),
+    );
+  for (const status of [cancelStudySession, completeStudySession])
+    await assert.rejects(
+      status(offline, 'not-a-uuid'),
+      /Study session not found/,
     );
 });
