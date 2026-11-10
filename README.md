@@ -47,7 +47,8 @@ new date and start time (SP-04) or a new duration, with the schedule's
 planned study time shown above it (SP-05). Each session can also have an
 optional objective (SP-06) and prepare for one of the student's tasks (SP-03):
 when both have a course they must agree, and moving a task to another course
-moves its sessions with it.
+moves its sessions with it. All of a session's details are changed in one
+edit form that can be cancelled (SP-07).
 
 See [authentication and course management](docs/authentication.md) for auth,
 security choices and the database contract.

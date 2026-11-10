@@ -15,6 +15,7 @@ import {
 import { createCourse } from '../src/web/features/courses/course-api.js';
 import {
   createStudySession,
+  editStudySession,
   findStudySession,
   listStudySessions,
   setStudySessionCourse,
@@ -523,3 +524,101 @@ test(
     assert.deepEqual(await findStudySession(owner, saved.id), saved);
   },
 );
+
+test(
+  'SP-07: one edit saves every detail of the same session',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const physics = await createCourse(student, { name: 'Physics' });
+    const lab = await createAssignment(student, {
+      title: 'Lab report',
+      courseId: physics.id,
+    });
+    const saved = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+      objective: 'Chapter 3',
+    });
+
+    // Course and task change together, so they agree in the saved result.
+    const edited = await editStudySession(student, saved.id, {
+      date: '2026-11-14',
+      startTime: '10:15',
+      durationMinutes: 75,
+      courseId: physics.id,
+      assignmentId: lab.id,
+      objective: 'Write the methods section',
+    });
+    const expected = {
+      id: saved.id,
+      date: '2026-11-14',
+      startTime: '10:15',
+      durationMinutes: 75,
+      courseId: physics.id,
+      assignmentId: lab.id,
+      objective: 'Write the methods section',
+    };
+    assert.deepEqual(edited, expected);
+    assert.deepEqual(await findStudySession(student, saved.id), expected);
+    assert.deepEqual(await listStudySessions(student), [expected]);
+
+    // Blank optional fields clear them.
+    const cleared = await editStudySession(student, saved.id, {
+      date: '2026-11-14',
+      startTime: '10:15',
+      durationMinutes: 75,
+      courseId: '',
+      assignmentId: '',
+      objective: '',
+    });
+    assert.deepEqual(cleared, {
+      ...expected,
+      courseId: null,
+      assignmentId: null,
+      objective: null,
+    });
+  },
+);
+
+test('SP-07: an invalid edit saves nothing', { skip: stack }, async () => {
+  const owner = await account();
+  const other = await account();
+  const math = await createCourse(owner, { name: 'Math' });
+  const physics = await createCourse(owner, { name: 'Physics' });
+  const lab = await createAssignment(owner, {
+    title: 'Lab report',
+    courseId: physics.id,
+  });
+  const saved = await createStudySession(owner, {
+    ...slot,
+    courseId: math.id,
+    objective: 'Chapter 3',
+  });
+  const form = {
+    date: '2026-11-14',
+    startTime: '10:15',
+    durationMinutes: 75,
+    courseId: math.id,
+    assignmentId: '',
+    objective: 'Chapter 4',
+  };
+
+  for (const [change, reason] of [
+    [{ durationMinutes: 0 }, /valid date/],
+    [{ date: '' }, /valid date/],
+    [{ objective: 'x'.repeat(501) }, /500 characters/],
+    [{ assignmentId: lab.id }, /belongs to another course/],
+  ] as const)
+    await assert.rejects(
+      editStudySession(owner, saved.id, { ...form, ...change }),
+      reason,
+      JSON.stringify(change),
+    );
+  await assert.rejects(
+    editStudySession(other, saved.id, form),
+    /Study session not found/,
+  );
+  assert.deepEqual(await findStudySession(owner, saved.id), saved);
+});
