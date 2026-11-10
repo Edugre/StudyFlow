@@ -48,3 +48,22 @@ export function durationText(minutes: number) {
 /** SP-09: how many of these sessions are completed. */
 export const completedCount = (sessions: StudySession[]) =>
   sessions.filter((session) => session.completedAt !== null).length;
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+/**
+ * SP-10: unfinished sessions that start now or later, earliest first.
+ * Completed (SP-09) and canceled (SP-08) sessions are left out. Start times
+ * are local wall time, so "now" is read in the browser's local time, as for
+ * upcoming tasks (AT-09). A session leaves the list once it has started.
+ */
+export function upcomingSessions(sessions: StudySession[], now = new Date()) {
+  const current = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return bySchedule(
+    scheduled(sessions).filter(
+      (session) =>
+        !session.completedAt &&
+        `${session.date} ${session.startTime}` >= current,
+    ),
+  );
+}

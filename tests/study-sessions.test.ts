@@ -6,6 +6,7 @@ import {
   durationText,
   plannedMinutes,
   scheduled,
+  upcomingSessions,
   type StudySession,
 } from '../src/shared/study-session.js';
 import {
@@ -756,5 +757,107 @@ test(
     );
     assert.deepEqual(await findStudySession(owner, done.id), completed);
     assert.deepEqual(await findStudySession(owner, dropped.id), canceled);
+  },
+);
+
+// Local time, like the session start times: Nov 12, 2026 at 12:00.
+const noon = new Date(2026, 10, 12, 12, 0);
+
+test('SP-10: unfinished future sessions are listed earliest first', () => {
+  const sessions = [
+    session('next week', '2026-11-19', '08:00'),
+    session('tonight', '2026-11-12', '18:00'),
+    session('right now', '2026-11-12', '12:00'),
+    session('tomorrow', '2026-11-13', '09:00'),
+    session('also tonight', '2026-11-12', '18:00'),
+  ];
+  assert.deepEqual(
+    upcomingSessions(sessions, noon).map((s) => s.id),
+    ['right now', 'tonight', 'also tonight', 'tomorrow', 'next week'],
+  );
+});
+
+test('SP-10: past, completed and canceled sessions are excluded', () => {
+  const sessions = [
+    session('yesterday', '2026-11-11', '18:00'),
+    session('a minute ago', '2026-11-12', '11:59'),
+    {
+      ...session('completed', '2026-11-13', '09:00'),
+      completedAt: '2026-11-12T10:00:00Z',
+    },
+    {
+      ...session('canceled', '2026-11-13', '10:00'),
+      canceledAt: '2026-11-12T10:00:00Z',
+    },
+    session('tomorrow', '2026-11-13', '11:00'),
+  ];
+  assert.deepEqual(
+    upcomingSessions(sessions, noon).map((s) => s.id),
+    ['tomorrow'],
+  );
+  assert.deepEqual(upcomingSessions(sessions.slice(0, 4), noon), []);
+});
+
+test('SP-10: the list follows the clock across midnight', () => {
+  const sessions = [
+    session('late tonight', '2026-11-12', '23:59'),
+    session('tomorrow', '2026-11-13', '00:30'),
+  ];
+  assert.deepEqual(
+    upcomingSessions(sessions, new Date(2026, 10, 12, 23, 59)).map((s) => s.id),
+    ['late tonight', 'tomorrow'],
+  );
+  assert.deepEqual(
+    upcomingSessions(sessions, new Date(2026, 10, 13, 0, 1)).map((s) => s.id),
+    ['tomorrow'],
+  );
+});
+
+test(
+  'SP-10: saved sessions keep their details in the upcoming list',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const exam = await createAssignment(student, {
+      title: 'Midterm',
+      kind: 'exam',
+      courseId: math.id,
+    });
+    const next = await createStudySession(student, {
+      date: '2026-11-13',
+      startTime: '09:00',
+      durationMinutes: 90,
+      courseId: math.id,
+      assignmentId: exam.id,
+      objective: 'Practice exam',
+    });
+    const later = await createStudySession(student, {
+      date: '2026-11-14',
+      startTime: '09:00',
+      durationMinutes: 60,
+    });
+    await createStudySession(student, {
+      date: '2026-11-01',
+      startTime: '09:00',
+      durationMinutes: 60,
+    });
+    const done = await createStudySession(student, {
+      date: '2026-11-15',
+      startTime: '09:00',
+      durationMinutes: 60,
+    });
+    const dropped = await createStudySession(student, {
+      date: '2026-11-16',
+      startTime: '09:00',
+      durationMinutes: 60,
+    });
+    await completeStudySession(student, done.id);
+    await cancelStudySession(student, dropped.id);
+
+    assert.deepEqual(upcomingSessions(await listStudySessions(student), noon), [
+      next,
+      later,
+    ]);
   },
 );

@@ -51,7 +51,8 @@ moves its sessions with it. All of a session's details are changed in one
 edit form that can be cancelled (SP-07), and a session can be marked
 completed once, with the count of completed sessions shown (SP-09), or
 canceled after confirming, which moves it out of the schedule and planned
-time into a canceled list (SP-08).
+time into a canceled list (SP-08). Upcoming study sessions lists the
+unfinished sessions that haven't started yet, earliest first (SP-10).
 
 See [authentication and course management](docs/authentication.md) for auth,
 security choices and the database contract.
@@ -145,7 +146,8 @@ CM-01–CM-07 and [SYS-01 authentication](https://trello.com/c/iDS4ur3t/51-sys-0
 Suggested order: resolve authentication/ownership and course design choices;
 CM-01; independent field cards CM-02–05; CM-09 and CM-08 after their dependencies;
 CM-06/07; CM-10 after assignment/session creation. Preserve separate card reviews.
-AT/SP/RN/GP stories remain in Product Backlog; Done remains empty.
+SP-01–SP-10 are in Review as stacked PRs (SP-01 first); RN/GP stories remain
+in Product Backlog; Done remains empty.
 
 See [implementation map and handoff](docs/implementation-plan.md) for card links,
 all dependencies, future module mapping, acceptance-test guidance, and gaps.

@@ -12,6 +12,7 @@ import {
   durationText,
   plannedMinutes,
   scheduled,
+  upcomingSessions,
   type StudySession,
 } from '../../../shared/study-session.js';
 import { supabase } from '../../lib/supabase.js';
@@ -136,6 +137,8 @@ function SessionFields({
  * many sessions are completed.
  * SP-08: a session can be canceled after confirming; it leaves the schedule
  * and planned study time but stays saved, listed under canceled sessions.
+ * SP-10: unfinished sessions that haven't started yet are listed earliest
+ * first, with their course, task and objective.
  */
 function Schedule() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -298,6 +301,8 @@ function Schedule() {
   );
 
   const inSchedule = scheduled(sessions);
+  // Recomputed on every render, so edits and the passing of time both apply.
+  const upcoming = upcomingSessions(sessions);
   const canceled = sessions.filter((session) => session.canceledAt);
 
   return (
@@ -314,6 +319,24 @@ function Schedule() {
           {busy ? 'Saving…' : 'Add study session'}
         </button>
       </form>
+      <h2>Upcoming study sessions</h2>
+      {loaded &&
+        (upcoming.length ? (
+          <ol>
+            {upcoming.map((session) => (
+              <li key={session.id}>
+                <button disabled={busy} onClick={() => reopen(session.id)}>
+                  {whenText(session)}
+                </button>
+                {courseName(session) && ` — ${courseName(session)}`}
+                {taskTitle(session) && ` — for ${taskTitle(session)}`}
+                {session.objective && ` — ${session.objective}`}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>No upcoming study sessions.</p>
+        ))}
       <h2>Your schedule</h2>
       {!loaded ? (
         !error && <p>Loading study sessions…</p>
