@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   bySchedule,
+  completedCount,
   durationText,
   plannedMinutes,
   type StudySession,
@@ -14,6 +15,7 @@ import {
 } from '../src/web/features/assignments/assignment-api.js';
 import { createCourse } from '../src/web/features/courses/course-api.js';
 import {
+  completeStudySession,
   createStudySession,
   editStudySession,
   findStudySession,
@@ -38,6 +40,7 @@ const session = (
   durationMinutes: 60,
   objective: null,
   assignmentId: null,
+  completedAt: null,
 });
 
 test('SP-01: the schedule lists sessions earliest first', () => {
@@ -71,6 +74,7 @@ test(
       durationMinutes: 90,
       objective: null,
       assignmentId: null,
+      completedAt: null,
     });
     const schedule = await listStudySessions(student);
     assert.deepEqual(schedule, [saved]);
@@ -559,6 +563,7 @@ test(
       courseId: physics.id,
       assignmentId: lab.id,
       objective: 'Write the methods section',
+      completedAt: null,
     };
     assert.deepEqual(edited, expected);
     assert.deepEqual(await findStudySession(student, saved.id), expected);
@@ -622,3 +627,56 @@ test('SP-07: an invalid edit saves nothing', { skip: stack }, async () => {
   );
   assert.deepEqual(await findStudySession(owner, saved.id), saved);
 });
+
+test(
+  'SP-09: completing a session counts it once',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const first = await createStudySession(student, slot);
+    const second = await createStudySession(student, {
+      ...slot,
+      startTime: '20:00',
+    });
+    assert.equal(completedCount(await listStudySessions(student)), 0);
+
+    const completed = await completeStudySession(student, first.id);
+    assert.notEqual(completed.completedAt, null);
+    assert.deepEqual(completed, {
+      ...first,
+      completedAt: completed.completedAt,
+    });
+    assert.deepEqual(await findStudySession(student, first.id), completed);
+    assert.equal(completedCount(await listStudySessions(student)), 1);
+
+    // Completing again keeps the first completion and the count.
+    const again = await completeStudySession(student, first.id);
+    assert.equal(again.completedAt, completed.completedAt);
+    assert.equal(completedCount(await listStudySessions(student)), 1);
+
+    // Editing a completed session keeps it completed.
+    const edited = await editStudySession(student, first.id, {
+      ...slot,
+      objective: 'Went well',
+    });
+    assert.equal(edited.completedAt, completed.completedAt);
+
+    await completeStudySession(student, second.id);
+    assert.equal(completedCount(await listStudySessions(student)), 2);
+  },
+);
+
+test(
+  'SP-09: another student cannot complete the session',
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const saved = await createStudySession(owner, slot);
+    await assert.rejects(
+      completeStudySession(other, saved.id),
+      /Study session not found/,
+    );
+    assert.equal((await findStudySession(owner, saved.id))?.completedAt, null);
+  },
+);

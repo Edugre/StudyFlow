@@ -6,7 +6,8 @@ import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 /**
  * Study session data access (SP-01) with course links (CM-10, SP-02),
  * rescheduling (SP-04), durations (SP-05), objectives (SP-06) and task
- * links (SP-03), all editable together in one form (SP-07). Ownership is
+ * links (SP-03), all editable together in one form (SP-07), and
+ * completion (SP-09). Ownership is
  * enforced by row level security.
  */
 type Row = {
@@ -17,9 +18,10 @@ type Row = {
   duration_minutes: number;
   objective: string | null;
   assignment_id: string | null;
+  completed_at: string | null;
 };
 const columns =
-  'id, course_id, starts_on, start_time, duration_minutes, objective, assignment_id';
+  'id, course_id, starts_on, start_time, duration_minutes, objective, assignment_id, completed_at';
 const toSession = (row: Row): StudySession => ({
   id: row.id,
   courseId: row.course_id,
@@ -28,6 +30,7 @@ const toSession = (row: Row): StudySession => ({
   durationMinutes: row.duration_minutes,
   objective: row.objective,
   assignmentId: row.assignment_id,
+  completedAt: row.completed_at,
 });
 export const taskCourseError =
   "This task belongs to another course. Give the session the task's course, or no course.";
@@ -233,4 +236,15 @@ export async function editStudySession(
   input: Record<string, unknown>,
 ) {
   return updateStudySession(client, id, details(input));
+}
+
+/**
+ * SP-09: marks the session completed. The database records its own time and
+ * keeps the first completion, so repeating this changes nothing and the
+ * session is counted once.
+ */
+export async function completeStudySession(client: SupabaseClient, id: string) {
+  return updateStudySession(client, id, {
+    completed_at: new Date().toISOString(),
+  });
 }
