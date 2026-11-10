@@ -45,6 +45,12 @@ RLS `with check` also requires the linked course to belong to the student.
 Rejected: `on delete cascade` (loses work and grades later) and `restrict`
 (blocks CM-07 until every item is moved by hand).
 
+Study sessions can also link to a task (SP-03, `assignment_id`, `on delete set
+null`, so deleting a task keeps its sessions). When both the session and its
+task have a course, they must agree: a trigger rejects a mismatch. Moving a
+task to another course moves its linked sessions with it (chosen 2026-11-10),
+rather than blocking the task's move until each session is fixed by hand.
+
 # Current semester is student-chosen (CM-08)
 
 Recorded 2026-10-29. Status: implemented, pending team review.

@@ -21,6 +21,7 @@ import {
   setStudySessionDuration,
   setStudySessionObjective,
   setStudySessionSchedule,
+  setStudySessionTask,
 } from '../src/web/features/study-sessions/session-api.js';
 import { setCurrentSemester } from '../src/web/features/courses/settings-api.js';
 import { validMeetings } from '../src/shared/meetings.js';
@@ -219,5 +220,13 @@ test('coursework input is validated before reaching Supabase', async () => {
   await assert.rejects(
     createStudySession(offline, { ...valid, objective: 'x'.repeat(501) }),
     /500 characters or fewer/,
+  );
+  await assert.rejects(
+    createStudySession(offline, { ...valid, assignmentId: 'not-a-uuid' }),
+    /Task not found/,
+  );
+  await assert.rejects(
+    setStudySessionTask(offline, crypto.randomUUID(), 42),
+    /Task not found/,
   );
 });

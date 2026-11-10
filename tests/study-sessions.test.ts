@@ -6,6 +6,12 @@ import {
   plannedMinutes,
   type StudySession,
 } from '../src/shared/study-session.js';
+import {
+  createAssignment,
+  deleteAssignment,
+  editAssignment,
+  setAssignmentCourse,
+} from '../src/web/features/assignments/assignment-api.js';
 import { createCourse } from '../src/web/features/courses/course-api.js';
 import {
   createStudySession,
@@ -15,6 +21,7 @@ import {
   setStudySessionDuration,
   setStudySessionObjective,
   setStudySessionSchedule,
+  setStudySessionTask,
 } from '../src/web/features/study-sessions/session-api.js';
 import { account, stack } from './support/supabase.js';
 
@@ -29,6 +36,7 @@ const session = (
   startTime,
   durationMinutes: 60,
   objective: null,
+  assignmentId: null,
 });
 
 test('SP-01: the schedule lists sessions earliest first', () => {
@@ -61,6 +69,7 @@ test(
       startTime: '18:30',
       durationMinutes: 90,
       objective: null,
+      assignmentId: null,
     });
     const schedule = await listStudySessions(student);
     assert.deepEqual(schedule, [saved]);
@@ -356,5 +365,161 @@ test(
       (await findStudySession(owner, saved.id))?.objective,
       'Flashcards',
     );
+  },
+);
+
+test(
+  'SP-03: a session identifies its task after reopening',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const exam = await createAssignment(student, {
+      title: 'Midterm',
+      kind: 'exam',
+      courseId: math.id,
+    });
+    const saved = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+      assignmentId: exam.id,
+    });
+    assert.equal(saved.assignmentId, exam.id);
+    assert.equal(
+      (await findStudySession(student, saved.id))?.assignmentId,
+      exam.id,
+    );
+
+    // A session without a course can be linked later, and unlinked again.
+    const other = await createStudySession(student, slot);
+    const linked = await setStudySessionTask(student, other.id, exam.id);
+    assert.deepEqual(linked, { ...other, assignmentId: exam.id });
+    const unlinked = await setStudySessionTask(student, other.id, '');
+    assert.deepEqual(unlinked, other);
+  },
+);
+
+test(
+  "SP-03: a session's course must agree with its task's course",
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const physics = await createCourse(student, { name: 'Physics' });
+    const exam = await createAssignment(student, {
+      title: 'Midterm',
+      courseId: math.id,
+    });
+
+    await assert.rejects(
+      createStudySession(student, {
+        ...slot,
+        courseId: physics.id,
+        assignmentId: exam.id,
+      }),
+      /belongs to another course/,
+    );
+    assert.deepEqual(await listStudySessions(student), []);
+
+    const saved = await createStudySession(student, {
+      ...slot,
+      courseId: physics.id,
+    });
+    await assert.rejects(
+      setStudySessionTask(student, saved.id, exam.id),
+      /belongs to another course/,
+    );
+    const linked = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+      assignmentId: exam.id,
+    });
+    await assert.rejects(
+      setStudySessionCourse(student, linked.id, physics.id),
+      /belongs to another course/,
+    );
+    assert.deepEqual(await findStudySession(student, saved.id), saved);
+    assert.deepEqual(await findStudySession(student, linked.id), linked);
+  },
+);
+
+test(
+  'SP-03: moving a task to another course moves its sessions',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const physics = await createCourse(student, { name: 'Physics' });
+    const exam = await createAssignment(student, {
+      title: 'Midterm',
+      courseId: math.id,
+    });
+    const linked = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+      assignmentId: exam.id,
+    });
+    const unrelated = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+    });
+
+    await setAssignmentCourse(student, exam.id, physics.id);
+    assert.equal(
+      (await findStudySession(student, linked.id))?.courseId,
+      physics.id,
+    );
+    // The edit form (AT-07) moves them too.
+    await editAssignment(student, exam.id, { title: 'Midterm', courseId: '' });
+    assert.equal((await findStudySession(student, linked.id))?.courseId, null);
+    assert.deepEqual(await findStudySession(student, unrelated.id), unrelated);
+    assert.equal((await listStudySessions(student)).length, 2);
+  },
+);
+
+test(
+  'SP-03: deleting a task keeps its sessions, unlinked',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const exam = await createAssignment(student, {
+      title: 'Midterm',
+      courseId: math.id,
+    });
+    const saved = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+      assignmentId: exam.id,
+    });
+    assert(await deleteAssignment(student, exam.id));
+    assert.deepEqual(await listStudySessions(student), [
+      { ...saved, assignmentId: null },
+    ]);
+  },
+);
+
+test(
+  "SP-03: a session cannot link to another student's task",
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const theirs = await createAssignment(other, { title: 'Their essay' });
+    const mine = await createAssignment(owner, { title: 'Essay' });
+    await assert.rejects(
+      createStudySession(owner, { ...slot, assignmentId: theirs.id }),
+      /Task not found/,
+    );
+    const saved = await createStudySession(owner, slot);
+    await assert.rejects(
+      setStudySessionTask(owner, saved.id, theirs.id),
+      /Task not found/,
+    );
+    await assert.rejects(
+      setStudySessionTask(other, saved.id, mine.id),
+      /Study session not found/,
+    );
+    assert.deepEqual(await findStudySession(owner, saved.id), saved);
   },
 );

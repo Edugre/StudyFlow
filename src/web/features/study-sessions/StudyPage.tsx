@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { optionLabel, type Assignment } from '../../../shared/assignment.js';
 import {
   bySchedule,
   durationText,
@@ -6,6 +7,7 @@ import {
   type StudySession,
 } from '../../../shared/study-session.js';
 import { supabase } from '../../lib/supabase.js';
+import { listAssignments } from '../assignments/assignment-api.js';
 import { AuthGate } from '../auth/AuthGate.js';
 import { listCourses, type SavedCourse } from '../courses/course-api.js';
 import {
@@ -16,6 +18,7 @@ import {
   setStudySessionDuration,
   setStudySessionObjective,
   setStudySessionSchedule,
+  setStudySessionTask,
 } from './session-api.js';
 
 export function StudyPage() {
@@ -44,10 +47,13 @@ const whenText = (session: StudySession) =>
  * SP-05: a session's duration can be changed, and the schedule shows the
  * planned study time of all its sessions.
  * SP-06: a session can have an objective, set when adding it or later.
+ * SP-03: a session can prepare for one of the student's tasks; when both
+ * have a course, the courses must agree.
  */
 function Schedule() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [courses, setCourses] = useState<SavedCourse[]>([]);
+  const [tasks, setTasks] = useState<Assignment[]>([]);
   const [selected, setSelected] = useState<StudySession | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -58,11 +64,16 @@ function Schedule() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([listStudySessions(supabase), listCourses(supabase)])
-      .then(([savedSessions, savedCourses]) => {
+    Promise.all([
+      listStudySessions(supabase),
+      listCourses(supabase),
+      listAssignments(supabase),
+    ])
+      .then(([savedSessions, savedCourses, savedTasks]) => {
         if (!active) return;
         setSessions(savedSessions);
         setCourses(savedCourses);
+        setTasks(savedTasks);
         setLoaded(true);
       })
       .catch((e) => {
@@ -98,6 +109,7 @@ function Schedule() {
         durationMinutes: minutes(values.durationMinutes),
         courseId: values.courseId,
         objective: values.objective,
+        assignmentId: values.assignmentId,
       });
       setSessions((previous) => bySchedule([...previous, saved]));
       opening.current = null;
@@ -163,6 +175,15 @@ function Schedule() {
     );
   }
 
+  function linkTask(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    saveSession(
+      () => setStudySessionTask(supabase, id, values.assignmentId),
+      'Task saved.',
+    );
+  }
+
   async function reopen(id: string) {
     opening.current = id;
     setError('');
@@ -180,6 +201,25 @@ function Schedule() {
 
   const courseName = (session: StudySession) =>
     courses.find((course) => course.id === session.courseId)?.name ?? null;
+
+  const taskTitle = (session: StudySession) =>
+    tasks.find((task) => task.id === session.assignmentId)?.title ?? null;
+
+  /** "Midterm (Exam, Math)", so the task's course is visible when choosing. */
+  const taskOptions = (
+    <>
+      <option value="">No task</option>
+      {tasks.map((task) => {
+        const course = courses.find((c) => c.id === task.courseId)?.name;
+        return (
+          <option key={task.id} value={task.id}>
+            {task.title} ({optionLabel(task.kind)}
+            {course && `, ${course}`})
+          </option>
+        );
+      })}
+    </>
+  );
 
   const courseOptions = (
     <>
@@ -224,6 +264,12 @@ function Schedule() {
           </select>
         </label>
         <label>
+          Task (optional)
+          <select name="assignmentId" defaultValue="">
+            {taskOptions}
+          </select>
+        </label>
+        <label>
           Objective (optional)
           <textarea name="objective" maxLength={500} />
         </label>
@@ -244,6 +290,7 @@ function Schedule() {
                   {whenText(session)}
                 </button>
                 {courseName(session) && ` — ${courseName(session)}`}
+                {taskTitle(session) && ` — for ${taskTitle(session)}`}
                 {session.objective && ` — ${session.objective}`}
               </li>
             ))}
@@ -275,6 +322,10 @@ function Schedule() {
             <div>
               <dt>Course</dt>
               <dd>{courseName(selected) ?? 'No course'}</dd>
+            </div>
+            <div>
+              <dt>Task</dt>
+              <dd>{taskTitle(selected) ?? 'No task'}</dd>
             </div>
             <div>
               <dt>Objective</dt>
@@ -338,6 +389,21 @@ function Schedule() {
               </select>
             </label>
             <button disabled={busy}>{busy ? 'Saving…' : 'Save course'}</button>
+          </form>
+          <form
+            onSubmit={(event) => linkTask(event, selected.id)}
+            key={`${selected.id}:task:${selected.assignmentId}`}
+          >
+            <label>
+              Task
+              <select
+                name="assignmentId"
+                defaultValue={selected.assignmentId ?? ''}
+              >
+                {taskOptions}
+              </select>
+            </label>
+            <button disabled={busy}>{busy ? 'Saving…' : 'Save task'}</button>
           </form>
           <form
             onSubmit={(event) => saveObjective(event, selected.id)}
