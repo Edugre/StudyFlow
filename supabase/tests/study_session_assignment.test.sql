@@ -21,14 +21,14 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
 
 select lives_ok(
-  $$ insert into public.study_sessions (id, course_id, assignment_id, starts_on, start_time, duration_minutes)
-     values ('00000000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-0000000000c1',
+  $$ insert into public.study_sessions (course_id, assignment_id, starts_on, start_time, duration_minutes)
+     values ('00000000-0000-0000-0000-0000000000c1',
              '00000000-0000-0000-0000-0000000000a1', '2026-11-12', '18:00', 60) $$,
   'a session links to a task in the same course'
 );
 select lives_ok(
-  $$ insert into public.study_sessions (id, assignment_id, starts_on, start_time, duration_minutes)
-     values ('00000000-0000-0000-0000-0000000000e2', '00000000-0000-0000-0000-0000000000a1',
+  $$ insert into public.study_sessions (assignment_id, starts_on, start_time, duration_minutes)
+     values ('00000000-0000-0000-0000-0000000000a1',
              '2026-11-13', '18:00', 60) $$,
   'a session without a course can link to a task'
 );
@@ -40,21 +40,21 @@ select throws_ok(
 );
 select throws_ok(
   $$ update public.study_sessions set course_id = '00000000-0000-0000-0000-0000000000c2'
-     where id = '00000000-0000-0000-0000-0000000000e1' $$,
+     where starts_on = '2026-11-12' $$,
   'P0001', null, 'a linked session cannot move to a course its task is not in'
 );
 select throws_ok(
   $$ update public.study_sessions set assignment_id = '00000000-0000-0000-0000-0000000000b1'
-     where id = '00000000-0000-0000-0000-0000000000e1' $$,
+     where starts_on = '2026-11-12' $$,
   'P0002', null, 'a session cannot link to another student''s task'
 );
 select lives_ok(
   $$ update public.study_sessions set assignment_id = '00000000-0000-0000-0000-0000000000a2'
-     where id = '00000000-0000-0000-0000-0000000000e1' $$,
+     where starts_on = '2026-11-12' $$,
   'a session in a course can link to a task without a course'
 );
 update public.study_sessions set assignment_id = '00000000-0000-0000-0000-0000000000a1'
-  where id = '00000000-0000-0000-0000-0000000000e1';
+  where starts_on = '2026-11-12';
 
 update public.assignments set course_id = '00000000-0000-0000-0000-0000000000c2'
   where id = '00000000-0000-0000-0000-0000000000a1';
