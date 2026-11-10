@@ -14,6 +14,7 @@ import {
   listStudySessions,
   setStudySessionCourse,
   setStudySessionDuration,
+  setStudySessionObjective,
   setStudySessionSchedule,
 } from './session-api.js';
 
@@ -42,6 +43,7 @@ const whenText = (session: StudySession) =>
  * SP-04: a session can be moved to a new date and start time in place.
  * SP-05: a session's duration can be changed, and the schedule shows the
  * planned study time of all its sessions.
+ * SP-06: a session can have an objective, set when adding it or later.
  */
 function Schedule() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -95,6 +97,7 @@ function Schedule() {
         startTime: values.startTime,
         durationMinutes: minutes(values.durationMinutes),
         courseId: values.courseId,
+        objective: values.objective,
       });
       setSessions((previous) => bySchedule([...previous, saved]));
       opening.current = null;
@@ -148,6 +151,15 @@ function Schedule() {
       () =>
         setStudySessionDuration(supabase, id, minutes(values.durationMinutes)),
       'Duration saved.',
+    );
+  }
+
+  function saveObjective(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    saveSession(
+      () => setStudySessionObjective(supabase, id, values.objective),
+      'Objective saved.',
     );
   }
 
@@ -211,6 +223,10 @@ function Schedule() {
             {courseOptions}
           </select>
         </label>
+        <label>
+          Objective (optional)
+          <textarea name="objective" maxLength={500} />
+        </label>
         <button disabled={busy}>
           {busy ? 'Saving…' : 'Add study session'}
         </button>
@@ -228,6 +244,7 @@ function Schedule() {
                   {whenText(session)}
                 </button>
                 {courseName(session) && ` — ${courseName(session)}`}
+                {session.objective && ` — ${session.objective}`}
               </li>
             ))}
           </ol>
@@ -258,6 +275,10 @@ function Schedule() {
             <div>
               <dt>Course</dt>
               <dd>{courseName(selected) ?? 'No course'}</dd>
+            </div>
+            <div>
+              <dt>Objective</dt>
+              <dd>{selected.objective ?? 'No objective'}</dd>
             </div>
           </dl>
           <form
@@ -317,6 +338,22 @@ function Schedule() {
               </select>
             </label>
             <button disabled={busy}>{busy ? 'Saving…' : 'Save course'}</button>
+          </form>
+          <form
+            onSubmit={(event) => saveObjective(event, selected.id)}
+            key={`${selected.id}:objective:${selected.objective}`}
+          >
+            <label>
+              Objective
+              <textarea
+                name="objective"
+                maxLength={500}
+                defaultValue={selected.objective ?? ''}
+              />
+            </label>
+            <button disabled={busy}>
+              {busy ? 'Saving…' : 'Save objective'}
+            </button>
           </form>
         </section>
       )}

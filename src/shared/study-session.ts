@@ -7,6 +7,8 @@ export interface StudySession {
   /** Local wall time in HH:MM. Timezone behavior requires a team decision. */
   startTime: string;
   durationMinutes: number;
+  /** SP-06: what the student intends to accomplish, or null for none. */
+  objective: string | null;
 }
 
 /** Schedule order: earliest date and start time first; ties keep saved order. */

@@ -5,7 +5,7 @@ import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 
 /**
  * Study session data access (SP-01) with course links (CM-10, SP-02) and
- * rescheduling (SP-04) and durations (SP-05). Ownership is enforced by row level security.
+ * rescheduling (SP-04), durations (SP-05) and objectives (SP-06). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
@@ -13,14 +13,17 @@ type Row = {
   starts_on: string;
   start_time: string;
   duration_minutes: number;
+  objective: string | null;
 };
-const columns = 'id, course_id, starts_on, start_time, duration_minutes';
+const columns =
+  'id, course_id, starts_on, start_time, duration_minutes, objective';
 const toSession = (row: Row): StudySession => ({
   id: row.id,
   courseId: row.course_id,
   date: row.starts_on,
   startTime: row.start_time.slice(0, 5),
   durationMinutes: row.duration_minutes,
+  objective: row.objective,
 });
 function fail(error: PostgrestError): never {
   failLinked(error, 'study session details');
@@ -46,12 +49,26 @@ function schedule(input: Record<string, unknown>) {
   };
 }
 
+export const objectiveError = 'Keep the objective to 500 characters or fewer.';
+
+/** An optional objective; blank means none. The database trims it too. */
+function objective(value: unknown) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || value.trim().length > 500)
+    throw new Error(objectiveError);
+  return value.trim() || null;
+}
+
 // Arguments are validated before touching the client so bad input never leaves the browser.
 export async function createStudySession(
   client: SupabaseClient,
   input: Record<string, unknown>,
 ) {
-  const row = { ...schedule(input), course_id: courseLink(input.courseId) };
+  const row = {
+    ...schedule(input),
+    course_id: courseLink(input.courseId),
+    objective: objective(input.objective),
+  };
   const { data, error } = await client
     .from('study_sessions')
     .insert(row)
@@ -153,4 +170,16 @@ export async function setStudySessionDuration(
 ) {
   if (!isDuration(durationMinutes)) throw new Error(durationError);
   return updateStudySession(client, id, { duration_minutes: durationMinutes });
+}
+
+/**
+ * SP-06: sets, replaces or (when blank) clears the session's objective.
+ * Its date, time, duration and course stay as saved.
+ */
+export async function setStudySessionObjective(
+  client: SupabaseClient,
+  id: string,
+  value: unknown,
+) {
+  return updateStudySession(client, id, { objective: objective(value) });
 }
