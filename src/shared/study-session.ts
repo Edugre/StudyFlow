@@ -11,6 +11,8 @@ export interface StudySession {
   objective: string | null;
   /** SP-03: the task (assignment, exam, …) it prepares for, or null. */
   assignmentId: string | null;
+  /** SP-09: when the session was marked completed, or null while unfinished. */
+  completedAt: string | null;
 }
 
 /** Schedule order: earliest date and start time first; ties keep saved order. */
@@ -30,3 +32,7 @@ export function durationText(minutes: number) {
   if (!hours) return `${rest} min`;
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 }
+
+/** SP-09: how many of these sessions are completed. */
+export const completedCount = (sessions: StudySession[]) =>
+  sessions.filter((session) => session.completedAt !== null).length;

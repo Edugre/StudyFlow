@@ -8,6 +8,7 @@ import {
 import { optionLabel, type Assignment } from '../../../shared/assignment.js';
 import {
   bySchedule,
+  completedCount,
   durationText,
   plannedMinutes,
   type StudySession,
@@ -17,6 +18,7 @@ import { listAssignments } from '../assignments/assignment-api.js';
 import { AuthGate } from '../auth/AuthGate.js';
 import { listCourses, type SavedCourse } from '../courses/course-api.js';
 import {
+  completeStudySession,
   createStudySession,
   editStudySession,
   findStudySession,
@@ -128,6 +130,8 @@ function SessionFields({
  * SP-03: a session can prepare for one of the student's tasks; when both
  * have a course, the courses must agree.
  * SP-07: every detail of a session can be changed in one form, or cancelled.
+ * SP-09: a session can be marked completed, once, and the schedule shows how
+ * many sessions are completed.
  */
 function Schedule() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -193,6 +197,23 @@ function Schedule() {
     });
   }
 
+  /** Replaces a saved session in the schedule and shows it as the open one. */
+  function showSaved(saved: StudySession) {
+    setSessions((previous) =>
+      bySchedule(
+        previous.map((session) => (session.id === saved.id ? saved : session)),
+      ),
+    );
+    setSelected(saved);
+  }
+
+  function complete(id: string) {
+    void run(async () => {
+      showSaved(await completeStudySession(supabase, id));
+      return 'Study session completed.';
+    });
+  }
+
   /**
    * Saves the whole edit form to the same session, so no duplicate is
    * created, and the schedule re-sorts. If anything is invalid, nothing is
@@ -204,15 +225,8 @@ function Schedule() {
     const input = formSession(event.currentTarget);
     void run(async () => {
       const saved = await editStudySession(supabase, id, input);
-      setSessions((previous) =>
-        bySchedule(
-          previous.map((session) =>
-            session.id === saved.id ? saved : session,
-          ),
-        ),
-      );
       setEditing(false);
-      setSelected(saved);
+      showSaved(saved);
       return 'Study session saved.';
     });
   }
@@ -286,6 +300,7 @@ function Schedule() {
       ) : sessions.length ? (
         <>
           <p>Planned study time: {durationText(plannedMinutes(sessions))}</p>
+          <p>Completed sessions: {completedCount(sessions)}</p>
           <ol>
             {sessions.map((session) => (
               <li key={session.id}>
@@ -295,6 +310,12 @@ function Schedule() {
                 {courseName(session) && ` — ${courseName(session)}`}
                 {taskTitle(session) && ` — for ${taskTitle(session)}`}
                 {session.objective && ` — ${session.objective}`}
+                {session.completedAt && (
+                  <>
+                    {' '}
+                    <span className="tag">Completed</span>
+                  </>
+                )}
               </li>
             ))}
           </ol>
@@ -334,7 +355,24 @@ function Schedule() {
               <dt>Objective</dt>
               <dd>{selected.objective ?? 'No objective'}</dd>
             </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                {selected.completedAt
+                  ? `Completed on ${new Date(selected.completedAt).toLocaleString()}`
+                  : 'Not completed'}
+              </dd>
+            </div>
           </dl>
+          {!selected.completedAt && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => complete(selected.id)}
+            >
+              {busy ? 'Saving…' : 'Mark completed'}
+            </button>
+          )}
           {editing ? (
             <form
               onSubmit={(event) => saveEdit(event, selected.id)}

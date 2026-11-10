@@ -63,6 +63,7 @@ test(
       ...schedule,
       objective: null,
       assignmentId: null,
+      completedAt: null,
     });
     assert.deepEqual(
       (await listAssignments(student, math.id)).map((a) => a.id),
