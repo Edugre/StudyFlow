@@ -6,7 +6,8 @@ import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 /**
  * Study session data access (SP-01) with course links (CM-10, SP-02),
  * rescheduling (SP-04), durations (SP-05), objectives (SP-06) and task
- * links (SP-03). Ownership is enforced by row level security.
+ * links (SP-03), all editable together in one form (SP-07). Ownership is
+ * enforced by row level security.
  */
 type Row = {
   id: string;
@@ -78,17 +79,20 @@ function objective(value: unknown) {
   return value.trim() || null;
 }
 
+/** Every editable detail of a session; throws if any is invalid. */
+const details = (input: Record<string, unknown>) => ({
+  ...schedule(input),
+  course_id: courseLink(input.courseId),
+  objective: objective(input.objective),
+  assignment_id: taskLink(input.assignmentId),
+});
+
 // Arguments are validated before touching the client so bad input never leaves the browser.
 export async function createStudySession(
   client: SupabaseClient,
   input: Record<string, unknown>,
 ) {
-  const row = {
-    ...schedule(input),
-    course_id: courseLink(input.courseId),
-    objective: objective(input.objective),
-    assignment_id: taskLink(input.assignmentId),
-  };
+  const row = details(input);
   const { data, error } = await client
     .from('study_sessions')
     .insert(row)
@@ -216,4 +220,17 @@ export async function setStudySessionTask(
   return updateStudySession(client, id, {
     assignment_id: taskLink(assignmentId),
   });
+}
+
+/**
+ * SP-07: saves every detail of a session in one update. The input holds the
+ * whole edit form; if any field is invalid (or the course disagrees with the
+ * task's), nothing is saved.
+ */
+export async function editStudySession(
+  client: SupabaseClient,
+  id: string,
+  input: Record<string, unknown>,
+) {
+  return updateStudySession(client, id, details(input));
 }

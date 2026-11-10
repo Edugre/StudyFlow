@@ -17,6 +17,7 @@ import {
 } from '../src/web/features/assignments/assignment-api.js';
 import {
   createStudySession,
+  editStudySession,
   setStudySessionCourse,
   setStudySessionDuration,
   setStudySessionObjective,
@@ -229,4 +230,16 @@ test('coursework input is validated before reaching Supabase', async () => {
     setStudySessionTask(offline, crypto.randomUUID(), 42),
     /Task not found/,
   );
+  for (const invalid of [
+    {},
+    { ...valid, durationMinutes: 0 },
+    { ...valid, objective: 'x'.repeat(501) },
+    { ...valid, courseId: 'not-a-uuid' },
+    { ...valid, assignmentId: 'not-a-uuid' },
+  ])
+    await assert.rejects(
+      editStudySession(offline, crypto.randomUUID(), invalid),
+      /valid date|500 characters|not found/,
+      JSON.stringify(invalid),
+    );
 });

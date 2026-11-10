@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { optionLabel, type Assignment } from '../../../shared/assignment.js';
 import {
   bySchedule,
@@ -12,13 +18,9 @@ import { AuthGate } from '../auth/AuthGate.js';
 import { listCourses, type SavedCourse } from '../courses/course-api.js';
 import {
   createStudySession,
+  editStudySession,
   findStudySession,
   listStudySessions,
-  setStudySessionCourse,
-  setStudySessionDuration,
-  setStudySessionObjective,
-  setStudySessionSchedule,
-  setStudySessionTask,
 } from './session-api.js';
 
 export function StudyPage() {
@@ -38,23 +40,101 @@ const minutes = (value: FormDataEntryValue | undefined) =>
 const whenText = (session: StudySession) =>
   `${session.date} ${session.startTime} (${session.durationMinutes} min)`;
 
+/** The add and edit forms' values, in the shape the session API takes. */
+function formSession(form: HTMLFormElement) {
+  const values = Object.fromEntries(new FormData(form));
+  return {
+    date: values.date,
+    startTime: values.startTime,
+    durationMinutes: minutes(values.durationMinutes),
+    courseId: values.courseId,
+    assignmentId: values.assignmentId,
+    objective: values.objective,
+  };
+}
+
+/**
+ * The fields shared by the add and edit forms, showing a saved session's
+ * values when editing it.
+ */
+function SessionFields({
+  session,
+  courseOptions,
+  taskOptions,
+}: {
+  session?: StudySession;
+  courseOptions: ReactNode;
+  taskOptions: ReactNode;
+}) {
+  return (
+    <>
+      <label>
+        Date
+        <input name="date" type="date" required defaultValue={session?.date} />
+      </label>
+      <label>
+        Start time
+        <input
+          name="startTime"
+          type="time"
+          required
+          defaultValue={session?.startTime}
+        />
+      </label>
+      <label>
+        Duration (minutes)
+        <input
+          name="durationMinutes"
+          type="number"
+          min={1}
+          max={1440}
+          step={1}
+          required
+          defaultValue={session?.durationMinutes}
+        />
+      </label>
+      <label>
+        Course (optional)
+        <select name="courseId" defaultValue={session?.courseId ?? ''}>
+          {courseOptions}
+        </select>
+      </label>
+      <label>
+        Task (optional)
+        <select name="assignmentId" defaultValue={session?.assignmentId ?? ''}>
+          {taskOptions}
+        </select>
+      </label>
+      <label>
+        Objective (optional)
+        <textarea
+          name="objective"
+          maxLength={500}
+          defaultValue={session?.objective ?? ''}
+        />
+      </label>
+    </>
+  );
+}
+
 /**
  * SP-01: the student's schedule of study sessions, and a form to reserve
  * a new one with a date, start time and duration.
- * SP-02: each session can be linked to one of the student's courses, and
- * moved to another course from its details.
+ * SP-02: each session can be linked to one of the student's courses.
  * SP-04: a session can be moved to a new date and start time in place.
- * SP-05: a session's duration can be changed, and the schedule shows the
- * planned study time of all its sessions.
- * SP-06: a session can have an objective, set when adding it or later.
+ * SP-05: each session has a duration, and the schedule shows the planned
+ * study time of all its sessions.
+ * SP-06: a session can have an objective.
  * SP-03: a session can prepare for one of the student's tasks; when both
  * have a course, the courses must agree.
+ * SP-07: every detail of a session can be changed in one form, or cancelled.
  */
 function Schedule() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [courses, setCourses] = useState<SavedCourse[]>([]);
   const [tasks, setTasks] = useState<Assignment[]>([]);
   const [selected, setSelected] = useState<StudySession | null>(null);
+  const [editing, setEditing] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -100,19 +180,13 @@ function Schedule() {
   function addSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const values = Object.fromEntries(new FormData(form));
+    const input = formSession(form);
     // Invalid input is rejected before the request, so nothing is created.
     void run(async () => {
-      const saved = await createStudySession(supabase, {
-        date: values.date,
-        startTime: values.startTime,
-        durationMinutes: minutes(values.durationMinutes),
-        courseId: values.courseId,
-        objective: values.objective,
-        assignmentId: values.assignmentId,
-      });
+      const saved = await createStudySession(supabase, input);
       setSessions((previous) => bySchedule([...previous, saved]));
       opening.current = null;
+      setEditing(false);
       setSelected(saved);
       form.reset();
       return 'Study session saved.';
@@ -120,12 +194,16 @@ function Schedule() {
   }
 
   /**
-   * Saves a change to the open session. It updates the same session in
-   * place, so no duplicate is created, and the schedule re-sorts.
+   * Saves the whole edit form to the same session, so no duplicate is
+   * created, and the schedule re-sorts. If anything is invalid, nothing is
+   * saved and the form stays open. Cancel just closes the form; nothing is
+   * sent, so the saved details stay.
    */
-  function saveSession(save: () => Promise<StudySession>, done: string) {
+  function saveEdit(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const input = formSession(event.currentTarget);
     void run(async () => {
-      const saved = await save();
+      const saved = await editStudySession(supabase, id, input);
       setSessions((previous) =>
         bySchedule(
           previous.map((session) =>
@@ -133,59 +211,15 @@ function Schedule() {
           ),
         ),
       );
+      setEditing(false);
       setSelected(saved);
-      return done;
+      return 'Study session saved.';
     });
-  }
-
-  function moveSession(event: FormEvent<HTMLFormElement>, id: string) {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    saveSession(
-      () => setStudySessionCourse(supabase, id, values.courseId),
-      'Course saved.',
-    );
-  }
-
-  function reschedule(event: FormEvent<HTMLFormElement>, id: string) {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    saveSession(
-      () => setStudySessionSchedule(supabase, id, values),
-      'Date and time saved.',
-    );
-  }
-
-  function changeDuration(event: FormEvent<HTMLFormElement>, id: string) {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    saveSession(
-      () =>
-        setStudySessionDuration(supabase, id, minutes(values.durationMinutes)),
-      'Duration saved.',
-    );
-  }
-
-  function saveObjective(event: FormEvent<HTMLFormElement>, id: string) {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    saveSession(
-      () => setStudySessionObjective(supabase, id, values.objective),
-      'Objective saved.',
-    );
-  }
-
-  function linkTask(event: FormEvent<HTMLFormElement>, id: string) {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    saveSession(
-      () => setStudySessionTask(supabase, id, values.assignmentId),
-      'Task saved.',
-    );
   }
 
   async function reopen(id: string) {
     opening.current = id;
+    setEditing(false);
     setError('');
     setSelected(null);
     try {
@@ -238,41 +272,10 @@ function Schedule() {
       {message && <p role="status">{message}</p>}
       <h2>Add a study session</h2>
       <form onSubmit={addSession}>
-        <label>
-          Date
-          <input name="date" type="date" required />
-        </label>
-        <label>
-          Start time
-          <input name="startTime" type="time" required />
-        </label>
-        <label>
-          Duration (minutes)
-          <input
-            name="durationMinutes"
-            type="number"
-            min={1}
-            max={1440}
-            step={1}
-            required
-          />
-        </label>
-        <label>
-          Course (optional)
-          <select name="courseId" defaultValue="">
-            {courseOptions}
-          </select>
-        </label>
-        <label>
-          Task (optional)
-          <select name="assignmentId" defaultValue="">
-            {taskOptions}
-          </select>
-        </label>
-        <label>
-          Objective (optional)
-          <textarea name="objective" maxLength={500} />
-        </label>
+        <SessionFields
+          courseOptions={courseOptions}
+          taskOptions={taskOptions}
+        />
         <button disabled={busy}>
           {busy ? 'Saving…' : 'Add study session'}
         </button>
@@ -332,95 +335,37 @@ function Schedule() {
               <dd>{selected.objective ?? 'No objective'}</dd>
             </div>
           </dl>
-          <form
-            onSubmit={(event) => reschedule(event, selected.id)}
-            key={`${selected.id}:when:${selected.date}:${selected.startTime}`}
-          >
-            <label>
-              Date
-              <input
-                name="date"
-                type="date"
-                required
-                defaultValue={selected.date}
+          {editing ? (
+            <form
+              onSubmit={(event) => saveEdit(event, selected.id)}
+              aria-label="Edit study session"
+            >
+              <h3>Edit study session</h3>
+              <SessionFields
+                session={selected}
+                courseOptions={courseOptions}
+                taskOptions={taskOptions}
               />
-            </label>
-            <label>
-              Start time
-              <input
-                name="startTime"
-                type="time"
-                required
-                defaultValue={selected.startTime}
-              />
-            </label>
-            <button disabled={busy}>
-              {busy ? 'Saving…' : 'Save date and time'}
-            </button>
-          </form>
-          <form
-            onSubmit={(event) => changeDuration(event, selected.id)}
-            key={`${selected.id}:duration:${selected.durationMinutes}`}
-          >
-            <label>
-              Duration (minutes)
-              <input
-                name="durationMinutes"
-                type="number"
-                min={1}
-                max={1440}
-                step={1}
-                required
-                defaultValue={selected.durationMinutes}
-              />
-            </label>
-            <button disabled={busy}>
-              {busy ? 'Saving…' : 'Save duration'}
-            </button>
-          </form>
-          <form
-            onSubmit={(event) => moveSession(event, selected.id)}
-            key={`${selected.id}:course:${selected.courseId}`}
-          >
-            <label>
-              Course
-              <select name="courseId" defaultValue={selected.courseId ?? ''}>
-                {courseOptions}
-              </select>
-            </label>
-            <button disabled={busy}>{busy ? 'Saving…' : 'Save course'}</button>
-          </form>
-          <form
-            onSubmit={(event) => linkTask(event, selected.id)}
-            key={`${selected.id}:task:${selected.assignmentId}`}
-          >
-            <label>
-              Task
-              <select
-                name="assignmentId"
-                defaultValue={selected.assignmentId ?? ''}
+              <button disabled={busy}>
+                {busy ? 'Saving…' : 'Save changes'}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setEditing(false)}
               >
-                {taskOptions}
-              </select>
-            </label>
-            <button disabled={busy}>{busy ? 'Saving…' : 'Save task'}</button>
-          </form>
-          <form
-            onSubmit={(event) => saveObjective(event, selected.id)}
-            key={`${selected.id}:objective:${selected.objective}`}
-          >
-            <label>
-              Objective
-              <textarea
-                name="objective"
-                maxLength={500}
-                defaultValue={selected.objective ?? ''}
-              />
-            </label>
-            <button disabled={busy}>
-              {busy ? 'Saving…' : 'Save objective'}
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setEditing(true)}
+            >
+              Edit study session
             </button>
-          </form>
+          )}
         </section>
       )}
     </>
