@@ -7,6 +7,7 @@ import {
   findStudySession,
   listStudySessions,
   setStudySessionCourse,
+  setStudySessionSchedule,
 } from '../src/web/features/study-sessions/session-api.js';
 import { account, stack } from './support/supabase.js';
 
@@ -162,5 +163,67 @@ test(
       /Study session not found/,
     );
     assert.equal((await findStudySession(owner, saved.id))?.courseId, math.id);
+  },
+);
+
+test(
+  'SP-04: a rescheduled session appears only at its new time',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const early = await createStudySession(student, {
+      date: '2026-11-12',
+      startTime: '08:00',
+      durationMinutes: 45,
+    });
+    const moving = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+    });
+
+    const moved = await setStudySessionSchedule(student, moving.id, {
+      date: '2026-11-11',
+      startTime: '07:30',
+    });
+    // Duration and course stay as saved.
+    assert.deepEqual(moved, {
+      ...moving,
+      date: '2026-11-11',
+      startTime: '07:30',
+    });
+    assert.deepEqual(await findStudySession(student, moving.id), moved);
+    // The schedule has no copy at the old time and lists the new time first.
+    assert.deepEqual(await listStudySessions(student), [moved, early]);
+  },
+);
+
+test(
+  'SP-04: an invalid new time keeps the saved schedule',
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const saved = await createStudySession(owner, slot);
+    for (const invalid of [
+      {},
+      { date: '2026-11-12' },
+      { startTime: '09:00' },
+      { date: '2026-02-30', startTime: '09:00' },
+      { date: '2026-11-12', startTime: '25:00' },
+    ])
+      await assert.rejects(
+        setStudySessionSchedule(owner, saved.id, invalid),
+        /valid date and a start time/,
+        JSON.stringify(invalid),
+      );
+    await assert.rejects(
+      setStudySessionSchedule(other, saved.id, {
+        date: '2026-11-13',
+        startTime: '09:00',
+      }),
+      /Study session not found/,
+    );
+    assert.deepEqual(await listStudySessions(owner), [saved]);
   },
 );

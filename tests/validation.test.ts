@@ -18,6 +18,7 @@ import {
 import {
   createStudySession,
   setStudySessionCourse,
+  setStudySessionSchedule,
 } from '../src/web/features/study-sessions/session-api.js';
 import { setCurrentSemester } from '../src/web/features/courses/settings-api.js';
 import { validMeetings } from '../src/shared/meetings.js';
@@ -181,6 +182,24 @@ test('coursework input is validated before reaching Supabase', async () => {
     );
   await assert.rejects(
     setStudySessionCourse(offline, 'not-a-uuid', null),
+    /Study session not found/,
+  );
+  for (const invalid of [
+    {},
+    { date: '2026-11-12' },
+    { date: '2026-02-30', startTime: '09:00' },
+    { date: '2026-11-12', startTime: '9:00' },
+  ])
+    await assert.rejects(
+      setStudySessionSchedule(offline, crypto.randomUUID(), invalid),
+      /valid date and a start time/,
+      JSON.stringify(invalid),
+    );
+  await assert.rejects(
+    setStudySessionSchedule(offline, 'not-a-uuid', {
+      date: '2026-11-12',
+      startTime: '09:00',
+    }),
     /Study session not found/,
   );
 });
