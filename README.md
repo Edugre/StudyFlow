@@ -45,7 +45,9 @@ schedule order with a form to add one (SP-01); a session can be linked to a
 course and moved to another from its details (SP-02), and rescheduled to a
 new date and start time (SP-04) or a new duration, with the schedule's
 planned study time shown above it (SP-05). Each session can also have an
-optional objective (SP-06).
+optional objective (SP-06) and prepare for one of the student's tasks (SP-03):
+when both have a course they must agree, and moving a task to another course
+moves its sessions with it.
 
 See [authentication and course management](docs/authentication.md) for auth,
 security choices and the database contract.

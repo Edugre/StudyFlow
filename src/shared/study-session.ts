@@ -9,6 +9,8 @@ export interface StudySession {
   durationMinutes: number;
   /** SP-06: what the student intends to accomplish, or null for none. */
   objective: string | null;
+  /** SP-03: the task (assignment, exam, …) it prepares for, or null. */
+  assignmentId: string | null;
 }
 
 /** Schedule order: earliest date and start time first; ties keep saved order. */

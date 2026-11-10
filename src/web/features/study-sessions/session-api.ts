@@ -4,8 +4,9 @@ import type { StudySession } from '../../../shared/study-session.js';
 import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 
 /**
- * Study session data access (SP-01) with course links (CM-10, SP-02) and
- * rescheduling (SP-04), durations (SP-05) and objectives (SP-06). Ownership is enforced by row level security.
+ * Study session data access (SP-01) with course links (CM-10, SP-02),
+ * rescheduling (SP-04), durations (SP-05), objectives (SP-06) and task
+ * links (SP-03). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
@@ -14,9 +15,10 @@ type Row = {
   start_time: string;
   duration_minutes: number;
   objective: string | null;
+  assignment_id: string | null;
 };
 const columns =
-  'id, course_id, starts_on, start_time, duration_minutes, objective';
+  'id, course_id, starts_on, start_time, duration_minutes, objective, assignment_id';
 const toSession = (row: Row): StudySession => ({
   id: row.id,
   courseId: row.course_id,
@@ -24,9 +26,26 @@ const toSession = (row: Row): StudySession => ({
   startTime: row.start_time.slice(0, 5),
   durationMinutes: row.duration_minutes,
   objective: row.objective,
+  assignmentId: row.assignment_id,
 });
+export const taskCourseError =
+  "This task belongs to another course. Give the session the task's course, or no course.";
+
+/**
+ * The database reports a task the student can't see (another student's, or
+ * deleted) as P0002, and a course that disagrees with the task's as P0001.
+ */
 function fail(error: PostgrestError): never {
+  if (error.code === 'P0002') throw new Error('Task not found');
+  if (error.code === 'P0001') throw new Error(taskCourseError);
   failLinked(error, 'study session details');
+}
+
+/** A task link is either absent (null) or a well-formed task id. */
+function taskLink(value: unknown) {
+  if (value === undefined || value === null || value === '') return null;
+  if (!isId(value)) throw new Error('Task not found');
+  return value;
 }
 
 export const sessionError =
@@ -68,6 +87,7 @@ export async function createStudySession(
     ...schedule(input),
     course_id: courseLink(input.courseId),
     objective: objective(input.objective),
+    assignment_id: taskLink(input.assignmentId),
   };
   const { data, error } = await client
     .from('study_sessions')
@@ -182,4 +202,18 @@ export async function setStudySessionObjective(
   value: unknown,
 ) {
   return updateStudySession(client, id, { objective: objective(value) });
+}
+
+/**
+ * SP-03: links the session to one of the student's tasks, or unlinks it with
+ * null. When both have a course, they must agree, or the link is rejected.
+ */
+export async function setStudySessionTask(
+  client: SupabaseClient,
+  id: string,
+  assignmentId: unknown,
+) {
+  return updateStudySession(client, id, {
+    assignment_id: taskLink(assignmentId),
+  });
 }
