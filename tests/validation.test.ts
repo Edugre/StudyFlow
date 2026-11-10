@@ -19,6 +19,7 @@ import {
   createStudySession,
   setStudySessionCourse,
   setStudySessionDuration,
+  setStudySessionObjective,
   setStudySessionSchedule,
 } from '../src/web/features/study-sessions/session-api.js';
 import { setCurrentSemester } from '../src/web/features/courses/settings-api.js';
@@ -209,4 +210,14 @@ test('coursework input is validated before reaching Supabase', async () => {
       /duration of 1–1440 whole minutes/,
       String(invalid),
     );
+  for (const invalid of ['x'.repeat(501), 42, { text: 'Read' }])
+    await assert.rejects(
+      setStudySessionObjective(offline, crypto.randomUUID(), invalid),
+      /500 characters or fewer/,
+      String(invalid),
+    );
+  await assert.rejects(
+    createStudySession(offline, { ...valid, objective: 'x'.repeat(501) }),
+    /500 characters or fewer/,
+  );
 });

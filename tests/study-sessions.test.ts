@@ -13,6 +13,7 @@ import {
   listStudySessions,
   setStudySessionCourse,
   setStudySessionDuration,
+  setStudySessionObjective,
   setStudySessionSchedule,
 } from '../src/web/features/study-sessions/session-api.js';
 import { account, stack } from './support/supabase.js';
@@ -27,6 +28,7 @@ const session = (
   date,
   startTime,
   durationMinutes: 60,
+  objective: null,
 });
 
 test('SP-01: the schedule lists sessions earliest first', () => {
@@ -58,6 +60,7 @@ test(
       date: '2026-11-12',
       startTime: '18:30',
       durationMinutes: 90,
+      objective: null,
     });
     const schedule = await listStudySessions(student);
     assert.deepEqual(schedule, [saved]);
@@ -284,5 +287,74 @@ test(
       /Study session not found/,
     );
     assert.deepEqual(await findStudySession(owner, saved.id), saved);
+  },
+);
+
+test(
+  'SP-06: a session shows its objective after reopening',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const saved = await createStudySession(student, {
+      ...slot,
+      objective: '  Review chapter 3  ',
+    });
+    assert.equal(saved.objective, 'Review chapter 3');
+    assert.equal(
+      (await findStudySession(student, saved.id))?.objective,
+      'Review chapter 3',
+    );
+  },
+);
+
+test(
+  'SP-06: editing the objective replaces it without changing the schedule',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const saved = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+      objective: 'Review chapter 3',
+    });
+
+    const edited = await setStudySessionObjective(
+      student,
+      saved.id,
+      'Finish problem set 4',
+    );
+    assert.deepEqual(edited, { ...saved, objective: 'Finish problem set 4' });
+    assert.deepEqual(await findStudySession(student, saved.id), edited);
+    assert.deepEqual(await listStudySessions(student), [edited]);
+
+    // A blank objective clears it.
+    const cleared = await setStudySessionObjective(student, saved.id, '   ');
+    assert.deepEqual(cleared, { ...saved, objective: null });
+  },
+);
+
+test(
+  'SP-06: a too-long objective is rejected and the saved one stays',
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const saved = await createStudySession(owner, {
+      ...slot,
+      objective: 'Flashcards',
+    });
+    await assert.rejects(
+      setStudySessionObjective(owner, saved.id, 'x'.repeat(501)),
+      /500 characters or fewer/,
+    );
+    await assert.rejects(
+      setStudySessionObjective(other, saved.id, 'Sneaky'),
+      /Study session not found/,
+    );
+    assert.equal(
+      (await findStudySession(owner, saved.id))?.objective,
+      'Flashcards',
+    );
   },
 );
