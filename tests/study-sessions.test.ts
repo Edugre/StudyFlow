@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bySchedule, type StudySession } from '../src/shared/study-session.js';
+import {
+  bySchedule,
+  durationText,
+  plannedMinutes,
+  type StudySession,
+} from '../src/shared/study-session.js';
 import { createCourse } from '../src/web/features/courses/course-api.js';
 import {
   createStudySession,
   findStudySession,
   listStudySessions,
   setStudySessionCourse,
+  setStudySessionDuration,
   setStudySessionSchedule,
 } from '../src/web/features/study-sessions/session-api.js';
 import { account, stack } from './support/supabase.js';
@@ -225,5 +231,58 @@ test(
       /Study session not found/,
     );
     assert.deepEqual(await listStudySessions(owner), [saved]);
+  },
+);
+
+test('SP-05: planned study time adds up saved durations', () => {
+  const sessions = [
+    { ...session('a', '2026-11-12', '09:00'), durationMinutes: 60 },
+    { ...session('b', '2026-11-12', '18:00'), durationMinutes: 30 },
+    { ...session('c', '2026-11-13', '18:00'), durationMinutes: 105 },
+  ];
+  assert.equal(plannedMinutes(sessions), 195);
+  assert.equal(plannedMinutes([]), 0);
+  assert.equal(durationText(195), '3 h 15 min');
+  assert.equal(durationText(60), '1 h');
+  assert.equal(durationText(45), '45 min');
+  assert.equal(durationText(0), '0 min');
+});
+
+test(
+  'SP-05: a new duration is saved without changing the schedule',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const saved = await createStudySession(student, {
+      ...slot,
+      courseId: math.id,
+    });
+
+    const longer = await setStudySessionDuration(student, saved.id, 120);
+    assert.deepEqual(longer, { ...saved, durationMinutes: 120 });
+    assert.deepEqual(await findStudySession(student, saved.id), longer);
+    assert.equal(plannedMinutes(await listStudySessions(student)), 120);
+  },
+);
+
+test(
+  'SP-05: an invalid duration is rejected and the saved one stays',
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const saved = await createStudySession(owner, slot);
+    for (const invalid of [0, -30, 1.5, NaN, '90', 'abc', null, 1441])
+      await assert.rejects(
+        setStudySessionDuration(owner, saved.id, invalid),
+        /duration of 1–1440 whole minutes/,
+        String(invalid),
+      );
+    await assert.rejects(
+      setStudySessionDuration(other, saved.id, 90),
+      /Study session not found/,
+    );
+    assert.deepEqual(await findStudySession(owner, saved.id), saved);
   },
 );

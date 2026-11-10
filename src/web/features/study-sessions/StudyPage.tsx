@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   bySchedule,
+  durationText,
+  plannedMinutes,
   type StudySession,
 } from '../../../shared/study-session.js';
 import { supabase } from '../../lib/supabase.js';
@@ -11,6 +13,7 @@ import {
   findStudySession,
   listStudySessions,
   setStudySessionCourse,
+  setStudySessionDuration,
   setStudySessionSchedule,
 } from './session-api.js';
 
@@ -23,6 +26,10 @@ export function StudyPage() {
   );
 }
 
+/** A form's minutes field as a number; blank becomes NaN so it is rejected. */
+const minutes = (value: FormDataEntryValue | undefined) =>
+  value === undefined || value === '' ? NaN : Number(value);
+
 /** "2026-11-02 18:00 (90 min)" */
 const whenText = (session: StudySession) =>
   `${session.date} ${session.startTime} (${session.durationMinutes} min)`;
@@ -33,6 +40,8 @@ const whenText = (session: StudySession) =>
  * SP-02: each session can be linked to one of the student's courses, and
  * moved to another course from its details.
  * SP-04: a session can be moved to a new date and start time in place.
+ * SP-05: a session's duration can be changed, and the schedule shows the
+ * planned study time of all its sessions.
  */
 function Schedule() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -84,8 +93,7 @@ function Schedule() {
       const saved = await createStudySession(supabase, {
         date: values.date,
         startTime: values.startTime,
-        durationMinutes:
-          values.durationMinutes === '' ? NaN : Number(values.durationMinutes),
+        durationMinutes: minutes(values.durationMinutes),
         courseId: values.courseId,
       });
       setSessions((previous) => bySchedule([...previous, saved]));
@@ -130,6 +138,16 @@ function Schedule() {
     saveSession(
       () => setStudySessionSchedule(supabase, id, values),
       'Date and time saved.',
+    );
+  }
+
+  function changeDuration(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    saveSession(
+      () =>
+        setStudySessionDuration(supabase, id, minutes(values.durationMinutes)),
+      'Duration saved.',
     );
   }
 
@@ -201,16 +219,19 @@ function Schedule() {
       {!loaded ? (
         !error && <p>Loading study sessions…</p>
       ) : sessions.length ? (
-        <ol>
-          {sessions.map((session) => (
-            <li key={session.id}>
-              <button disabled={busy} onClick={() => reopen(session.id)}>
-                {whenText(session)}
-              </button>
-              {courseName(session) && ` — ${courseName(session)}`}
-            </li>
-          ))}
-        </ol>
+        <>
+          <p>Planned study time: {durationText(plannedMinutes(sessions))}</p>
+          <ol>
+            {sessions.map((session) => (
+              <li key={session.id}>
+                <button disabled={busy} onClick={() => reopen(session.id)}>
+                  {whenText(session)}
+                </button>
+                {courseName(session) && ` — ${courseName(session)}`}
+              </li>
+            ))}
+          </ol>
+        </>
       ) : (
         <p>No study sessions yet. Add your first session above.</p>
       )}
@@ -228,7 +249,11 @@ function Schedule() {
             </div>
             <div>
               <dt>Duration</dt>
-              <dd>{selected.durationMinutes} minutes</dd>
+              <dd>
+                {selected.durationMinutes} minutes
+                {selected.durationMinutes >= 60 &&
+                  ` (${durationText(selected.durationMinutes)})`}
+              </dd>
             </div>
             <div>
               <dt>Course</dt>
@@ -259,6 +284,26 @@ function Schedule() {
             </label>
             <button disabled={busy}>
               {busy ? 'Saving…' : 'Save date and time'}
+            </button>
+          </form>
+          <form
+            onSubmit={(event) => changeDuration(event, selected.id)}
+            key={`${selected.id}:duration:${selected.durationMinutes}`}
+          >
+            <label>
+              Duration (minutes)
+              <input
+                name="durationMinutes"
+                type="number"
+                min={1}
+                max={1440}
+                step={1}
+                required
+                defaultValue={selected.durationMinutes}
+              />
+            </label>
+            <button disabled={busy}>
+              {busy ? 'Saving…' : 'Save duration'}
             </button>
           </form>
           <form

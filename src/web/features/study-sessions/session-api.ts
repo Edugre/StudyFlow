@@ -5,7 +5,7 @@ import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 
 /**
  * Study session data access (SP-01) with course links (CM-10, SP-02) and
- * rescheduling (SP-04). Ownership is enforced by row level security.
+ * rescheduling (SP-04) and durations (SP-05). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
@@ -29,20 +29,20 @@ function fail(error: PostgrestError): never {
 export const sessionError =
   'Enter a valid date, a start time (HH:MM) and a duration of 1–1440 minutes.';
 
+/** A whole number of minutes from 1 through 1440 (one day). */
+const isDuration = (value: unknown): value is number =>
+  Number.isInteger(value) &&
+  (value as number) >= 1 &&
+  (value as number) <= 1440;
+
 function schedule(input: Record<string, unknown>) {
   const { date, startTime, durationMinutes } = input;
-  if (
-    !isDate(date) ||
-    !isTime(startTime) ||
-    !Number.isInteger(durationMinutes) ||
-    (durationMinutes as number) < 1 ||
-    (durationMinutes as number) > 1440
-  )
+  if (!isDate(date) || !isTime(startTime) || !isDuration(durationMinutes))
     throw new Error(sessionError);
   return {
     starts_on: date,
     start_time: startTime,
-    duration_minutes: durationMinutes as number,
+    duration_minutes: durationMinutes,
   };
 }
 
@@ -137,4 +137,20 @@ export async function setStudySessionSchedule(
     starts_on: date,
     start_time: startTime,
   });
+}
+
+export const durationError = 'Enter a duration of 1–1440 whole minutes.';
+
+/**
+ * SP-05: changes only the session's intended duration. Zero, negative,
+ * fractional and non-numeric values are rejected before the request, so the
+ * saved duration stays.
+ */
+export async function setStudySessionDuration(
+  client: SupabaseClient,
+  id: string,
+  durationMinutes: unknown,
+) {
+  if (!isDuration(durationMinutes)) throw new Error(durationError);
+  return updateStudySession(client, id, { duration_minutes: durationMinutes });
 }
