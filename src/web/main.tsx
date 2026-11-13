@@ -1,3 +1,4 @@
+
 import React, { lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
@@ -19,6 +20,12 @@ const StudyPage = lazy(() =>
     default: module.StudyPage,
   })),
 );
+const SettingsPage = lazy(() =>
+  import('./features/settings/SettingsPage.js').then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
+
 const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL &&
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -48,6 +55,7 @@ createRoot(document.getElementById('root')!).render(
           <Link to="/courses">Courses</Link>
           <Link to="/tasks">Tasks</Link>
           <Link to="/study">Study</Link>
+          <Link to="/settings">Settings</Link>
         </nav>
       </header>
       <main>
@@ -85,6 +93,14 @@ createRoot(document.getElementById('root')!).render(
             element={
               <Workspace name="Study sessions">
                 <StudyPage />
+              </Workspace>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <Workspace name="Settings">
+                <SettingsPage />
               </Workspace>
             }
           />
