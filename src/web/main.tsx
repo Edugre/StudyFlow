@@ -1,3 +1,4 @@
+
 import React, { lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
@@ -17,6 +18,16 @@ const TasksPage = lazy(() =>
 const StudyPage = lazy(() =>
   import('./features/study-sessions/StudyPage.js').then((module) => ({
     default: module.StudyPage,
+  })),
+);
+const SettingsPage = lazy(() =>
+  import('./features/settings/SettingsPage.js').then((module) => ({
+    default: module.SettingsPage,
+  })),
+);
+const NotificationsPage = lazy(() =>
+  import('./features/notifications/NotificationsPage.js').then((module) => ({
+    default: module.NotificationsPage,
   })),
 );
 const configured = Boolean(
@@ -48,6 +59,8 @@ createRoot(document.getElementById('root')!).render(
           <Link to="/courses">Courses</Link>
           <Link to="/tasks">Tasks</Link>
           <Link to="/study">Study</Link>
+          <Link to="/settings">Settings</Link>
+          <Link to="/notifications">Notifications</Link>
         </nav>
       </header>
       <main>
@@ -87,6 +100,22 @@ createRoot(document.getElementById('root')!).render(
                 <StudyPage />
               </Workspace>
             }
+          />
+          <Route
+            path="/settings"
+            element={
+              <Workspace name="Settings">
+                <SettingsPage />
+              </Workspace>
+            }
+          />
+          <Route
+          path="/notifications"
+          element={
+            <Workspace name="Notifications">
+              <NotificationsPage />
+            </Workspace>
+          }
           />
           <Route
             path="*"
