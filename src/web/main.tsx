@@ -25,7 +25,11 @@ const SettingsPage = lazy(() =>
     default: module.SettingsPage,
   })),
 );
-
+const NotificationsPage = lazy(() =>
+  import('./features/notifications/NotificationsPage.js').then((module) => ({
+    default: module.NotificationsPage,
+  })),
+);
 const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL &&
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -56,6 +60,7 @@ createRoot(document.getElementById('root')!).render(
           <Link to="/tasks">Tasks</Link>
           <Link to="/study">Study</Link>
           <Link to="/settings">Settings</Link>
+          <Link to="/notifications">Notifications</Link>
         </nav>
       </header>
       <main>
@@ -103,6 +108,14 @@ createRoot(document.getElementById('root')!).render(
                 <SettingsPage />
               </Workspace>
             }
+          />
+          <Route
+          path="/notifications"
+          element={
+            <Workspace name="Notifications">
+              <NotificationsPage />
+            </Workspace>
+          }
           />
           <Route
             path="*"
