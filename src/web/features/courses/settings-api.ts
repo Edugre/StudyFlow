@@ -1,4 +1,3 @@
-
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { text } from './course-api.js';
 
