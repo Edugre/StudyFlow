@@ -38,6 +38,7 @@ test(
       dueTime: null,
       completedAt: null,
       grade: null,
+      remindersEnabled: true,
     });
     assert.equal(await findAssignment(other, task.id), null);
   },
@@ -125,6 +126,7 @@ test(
       dueTime: null,
       completedAt: null,
       grade: null,
+      remindersEnabled: true,
     });
 
     await assert.rejects(
@@ -298,6 +300,7 @@ test(
       dueTime: '23:59',
       completedAt: null,
       grade: null,
+      remindersEnabled: true,
     };
     assert.deepEqual(await findAssignment(student, essay.id), edited);
     assert.deepEqual(await findAssignment(student, lab.id), labBefore);

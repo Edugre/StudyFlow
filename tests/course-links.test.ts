@@ -56,6 +56,7 @@ test(
       dueTime: null,
       completedAt: null,
       grade: null,
+      remindersEnabled: true,
     });
     assert.deepEqual(await findStudySession(student, review.id), {
       id: review.id,

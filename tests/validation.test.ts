@@ -14,6 +14,7 @@ import {
   setAssignmentDue,
   setAssignmentKind,
   setAssignmentPriority,
+  setAssignmentReminders,
 } from '../src/web/features/assignments/assignment-api.js';
 import {
   cancelStudySession,
@@ -120,6 +121,14 @@ test('RN-08: notification ids are validated before reaching Supabase', async () 
     await assert.rejects(
       markNotificationRead(offline, id),
       /Invalid notification identifier/,
+    );
+});
+
+test('RN-06: task reminder settings are validated before reaching Supabase', async () => {
+  for (const value of ['on', 1, null, undefined])
+    await assert.rejects(
+      setAssignmentReminders(offline, crypto.randomUUID(), value),
+      /whether this task sends reminders/,
     );
 });
 
