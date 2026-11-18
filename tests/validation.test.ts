@@ -101,6 +101,7 @@ test('RN-04: reminder settings are validated before reaching Supabase', async ()
     assignment_reminders_enabled: true,
     exam_reminders_enabled: true,
     study_session_reminders_enabled: true,
+    overdue_notifications_enabled: true,
     reminder_lead_minutes: 60,
     time_zone: 'UTC',
   };
@@ -129,6 +130,31 @@ test('RN-06: task reminder settings are validated before reaching Supabase', asy
     await assert.rejects(
       setAssignmentReminders(offline, crypto.randomUUID(), value),
       /whether this task sends reminders/,
+    );
+});
+
+test('RN-07: notification categories are validated before reaching Supabase', async () => {
+  const valid: ReminderSettings = {
+    assignment_reminders_enabled: true,
+    exam_reminders_enabled: true,
+    study_session_reminders_enabled: true,
+    overdue_notifications_enabled: true,
+    reminder_lead_minutes: 60,
+    time_zone: 'UTC',
+  };
+  for (const category of [
+    'assignment_reminders_enabled',
+    'exam_reminders_enabled',
+    'study_session_reminders_enabled',
+    'overdue_notifications_enabled',
+  ] as const)
+    await assert.rejects(
+      saveReminderSettings(offline, {
+        ...valid,
+        [category]: 'yes' as unknown as boolean,
+      }),
+      /enabled or disabled/,
+      category,
     );
 });
 

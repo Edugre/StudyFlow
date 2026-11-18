@@ -87,8 +87,8 @@ function ReminderSettingsForm() {
   return (
     <form onSubmit={submit}>
       <section>
-        <h2>Reminder preferences</h2>
-        <p>Choose which reminders you would like to receive.</p>
+        <h2>Notification categories</h2>
+        <p>Choose which notifications you would like to receive.</p>
 
         <label>
           <span>
@@ -134,6 +134,25 @@ function ReminderSettingsForm() {
             Study-session reminders
           </span>
         </label>
+
+        <label>
+          <span>
+            <input
+              type="checkbox"
+              checked={settings.overdue_notifications_enabled}
+              onChange={(event) =>
+                updateSetting(
+                  'overdue_notifications_enabled',
+                  event.target.checked,
+                )
+              }
+            />{' '}
+            Overdue task notifications
+          </span>
+        </label>
+        <p>
+          You can also turn reminders off for a single task on the Tasks page.
+        </p>
       </section>
 
       <section>
@@ -197,7 +216,7 @@ export function SettingsPage() {
   return (
     <>
       <h1>Settings</h1>
-      <p>Manage your reminder preferences and time zone.</p>
+      <p>Manage your notification preferences and time zone.</p>
       <AuthGate>{() => <ReminderSettingsForm />}</AuthGate>
     </>
   );
