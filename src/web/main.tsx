@@ -1,4 +1,3 @@
-
 import React, { lazy, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Route, Routes } from 'react-router-dom';
@@ -110,12 +109,12 @@ createRoot(document.getElementById('root')!).render(
             }
           />
           <Route
-          path="/notifications"
-          element={
-            <Workspace name="Notifications">
-              <NotificationsPage />
-            </Workspace>
-          }
+            path="/notifications"
+            element={
+              <Workspace name="Notifications">
+                <NotificationsPage />
+              </Workspace>
+            }
           />
           <Route
             path="*"

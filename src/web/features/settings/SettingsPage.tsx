@@ -1,4 +1,3 @@
-
 import { useEffect, useState, type FormEvent } from 'react';
 import { supabase } from '../../lib/supabase.js';
 import {
@@ -79,9 +78,7 @@ function ReminderSettingsForm() {
 
   if (!settings) {
     return (
-      <p role="alert">
-        {error || 'Unable to load your reminder settings.'}
-      </p>
+      <p role="alert">{error || 'Unable to load your reminder settings.'}</p>
     );
   }
 
@@ -151,10 +148,7 @@ function ReminderSettingsForm() {
             required
             value={settings.reminder_lead_minutes}
             onChange={(event) =>
-              updateSetting(
-                'reminder_lead_minutes',
-                Number(event.target.value),
-              )
+              updateSetting('reminder_lead_minutes', Number(event.target.value))
             }
           />
         </label>
@@ -166,9 +160,7 @@ function ReminderSettingsForm() {
         <label>
           Your time zone
           <select
-            value={
-              knownTimeZone ? settings.time_zone : 'other'
-            }
+            value={knownTimeZone ? settings.time_zone : 'other'}
             onChange={(event) => {
               if (event.target.value !== 'other') {
                 updateSetting('time_zone', event.target.value);
@@ -186,8 +178,8 @@ function ReminderSettingsForm() {
           </select>
         </label>
         <p>
-          Your time zone helps StudyFlow schedule reminders at the correct
-          local time.
+          Your time zone helps StudyFlow schedule reminders at the correct local
+          time.
         </p>
       </section>
 
