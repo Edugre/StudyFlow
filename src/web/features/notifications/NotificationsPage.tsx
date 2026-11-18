@@ -95,7 +95,10 @@ export function NotificationsPage() {
   return (
     <>
       <h1>Notifications</h1>
-      <p>Keep track of your assignment, exam, and study-session reminders.</p>
+      <p>
+        Keep track of your assignment, exam, and study-session reminders, and of
+        tasks that are overdue.
+      </p>
       <AuthGate>{() => <NotificationList />}</AuthGate>
     </>
   );

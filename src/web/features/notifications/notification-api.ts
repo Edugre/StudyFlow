@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type Notification = {
   id: string;
-  source_type: 'assignment' | 'exam' | 'study_session';
+  source_type: 'assignment' | 'exam' | 'study_session' | 'overdue';
   source_id: string;
   scheduled_for: string;
   title: string;
