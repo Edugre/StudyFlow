@@ -26,7 +26,11 @@ import {
   setStudySessionSchedule,
   setStudySessionTask,
 } from '../src/web/features/study-sessions/session-api.js';
-import { setCurrentSemester } from '../src/web/features/courses/settings-api.js';
+import {
+  saveReminderSettings,
+  setCurrentSemester,
+  type ReminderSettings,
+} from '../src/web/features/courses/settings-api.js';
 import { validMeetings } from '../src/shared/meetings.js';
 
 // Invalid input must be rejected before any request is made.
@@ -88,6 +92,26 @@ test('current semester input is validated before reaching Supabase', async () =>
     /at most 100 characters/,
   );
   await assert.rejects(setCurrentSemester(offline, 42), /must be text/);
+});
+
+test('RN-04: reminder settings are validated before reaching Supabase', async () => {
+  const valid: ReminderSettings = {
+    assignment_reminders_enabled: true,
+    exam_reminders_enabled: true,
+    study_session_reminders_enabled: true,
+    reminder_lead_minutes: 60,
+    time_zone: 'UTC',
+  };
+  for (const reminder_lead_minutes of [0, 4, 10081, 30.5, Number.NaN])
+    await assert.rejects(
+      saveReminderSettings(offline, { ...valid, reminder_lead_minutes }),
+      /between 5 and 10080 minutes/,
+      String(reminder_lead_minutes),
+    );
+  await assert.rejects(
+    saveReminderSettings(offline, { ...valid, time_zone: 'Mars/Olympus' }),
+    /time-zone/,
+  );
 });
 
 test('coursework input is validated before reaching Supabase', async () => {
