@@ -31,6 +31,7 @@ import {
   setCurrentSemester,
   type ReminderSettings,
 } from '../src/web/features/courses/settings-api.js';
+import { markNotificationRead } from '../src/web/features/notifications/notification-api.js';
 import { validMeetings } from '../src/shared/meetings.js';
 
 // Invalid input must be rejected before any request is made.
@@ -112,6 +113,14 @@ test('RN-04: reminder settings are validated before reaching Supabase', async ()
     saveReminderSettings(offline, { ...valid, time_zone: 'Mars/Olympus' }),
     /time-zone/,
   );
+});
+
+test('RN-08: notification ids are validated before reaching Supabase', async () => {
+  for (const id of ['not-a-uuid', '', 42, null])
+    await assert.rejects(
+      markNotificationRead(offline, id),
+      /Invalid notification identifier/,
+    );
 });
 
 test('coursework input is validated before reaching Supabase', async () => {
