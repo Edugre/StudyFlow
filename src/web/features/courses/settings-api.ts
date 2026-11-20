@@ -31,14 +31,21 @@ export async function setCurrentSemester(
   return data.current_semester;
 }
 
-/** RN-01, RN-02, RN-03: reminder preferences for one student. */
+/**
+ * RN-01, RN-02, RN-03: reminder preferences for one student.
+ * RN-07: each notification category can be turned on or off.
+ */
 export type ReminderSettings = {
   assignment_reminders_enabled: boolean;
   exam_reminders_enabled: boolean;
   study_session_reminders_enabled: boolean;
+  overdue_notifications_enabled: boolean;
   reminder_lead_minutes: number;
   time_zone: string;
 };
+
+const reminderColumns =
+  'assignment_reminders_enabled, exam_reminders_enabled, study_session_reminders_enabled, overdue_notifications_enabled, reminder_lead_minutes, time_zone';
 
 /** Checks whether a time-zone identifier is supported by the browser. */
 function validTimeZone(value: unknown): value is string {
@@ -55,9 +62,7 @@ function validTimeZone(value: unknown): value is string {
 export async function getReminderSettings(client: SupabaseClient) {
   const { data, error } = await client
     .from('student_settings')
-    .select(
-      'assignment_reminders_enabled, exam_reminders_enabled, study_session_reminders_enabled, reminder_lead_minutes, time_zone',
-    )
+    .select(reminderColumns)
     .maybeSingle<ReminderSettings>();
 
   if (error) throw new Error('Unable to load reminder settings.');
@@ -71,9 +76,7 @@ export async function getReminderSettings(client: SupabaseClient) {
   const { data: created, error: createError } = await client
     .from('student_settings')
     .upsert({ time_zone: browserTimeZone }, { onConflict: 'owner_id' })
-    .select(
-      'assignment_reminders_enabled, exam_reminders_enabled, study_session_reminders_enabled, reminder_lead_minutes, time_zone',
-    )
+    .select(reminderColumns)
     .single<ReminderSettings>();
 
   if (createError || !created)
@@ -90,7 +93,8 @@ export async function saveReminderSettings(
   if (
     typeof settings.assignment_reminders_enabled !== 'boolean' ||
     typeof settings.exam_reminders_enabled !== 'boolean' ||
-    typeof settings.study_session_reminders_enabled !== 'boolean'
+    typeof settings.study_session_reminders_enabled !== 'boolean' ||
+    typeof settings.overdue_notifications_enabled !== 'boolean'
   ) {
     throw new Error('Reminder preferences must be enabled or disabled.');
   }
@@ -110,9 +114,7 @@ export async function saveReminderSettings(
   const { data, error } = await client
     .from('student_settings')
     .upsert(settings, { onConflict: 'owner_id' })
-    .select(
-      'assignment_reminders_enabled, exam_reminders_enabled, study_session_reminders_enabled, reminder_lead_minutes, time_zone',
-    )
+    .select(reminderColumns)
     .single<ReminderSettings>();
 
   if (error) throw new Error('Unable to save reminder settings.');
