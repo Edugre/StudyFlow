@@ -12,7 +12,8 @@ import { courseLink, failLinked, isId } from '../../lib/linked-course.js';
 /**
  * Assignment data access (AT-01) with course links (CM-10, AT-02) and
  * task types (AT-04), priorities (AT-05), deadlines (AT-03), completion
- * (AT-06) and grades (AT-10). Ownership is enforced by row level security.
+ * (AT-06), grades (AT-10) and per-task reminders (RN-06). Ownership is
+ * enforced by row level security.
  */
 type Row = {
   id: string;
@@ -24,9 +25,10 @@ type Row = {
   due_time: string | null;
   completed_at: string | null;
   grade: number | string | null;
+  reminders_enabled: boolean;
 };
 const columns =
-  'id, title, course_id, kind, priority, due_on, due_time, completed_at, grade';
+  'id, title, course_id, kind, priority, due_on, due_time, completed_at, grade, reminders_enabled';
 const toAssignment = (row: Row): Assignment => ({
   id: row.id,
   title: row.title,
@@ -38,6 +40,7 @@ const toAssignment = (row: Row): Assignment => ({
   completedAt: row.completed_at,
   // Postgres numeric may arrive as a string.
   grade: row.grade === null ? null : Number(row.grade),
+  remindersEnabled: row.reminders_enabled,
 });
 function fail(error: PostgrestError): never {
   failLinked(error, 'assignment details');
@@ -214,6 +217,20 @@ export async function editAssignment(
     priority: priority(input.priority),
     ...deadline(input.dueDate, input.dueTime),
   });
+}
+
+/**
+ * RN-06: turns reminders on or off for one task. Other tasks keep their own
+ * setting, and reminders already delivered stay in the history.
+ */
+export async function setAssignmentReminders(
+  client: SupabaseClient,
+  id: string,
+  enabled: unknown,
+) {
+  if (typeof enabled !== 'boolean')
+    throw new Error('Choose whether this task sends reminders.');
+  return updateAssignment(client, id, { reminders_enabled: enabled });
 }
 
 /** AT-08: deletes one task; false when it doesn't exist or isn't the student's. */

@@ -23,6 +23,8 @@ export interface Assignment {
   completedAt: string | null;
   /** Percentage grade from 0 through 100, only on completed tasks. */
   grade: number | null;
+  /** RN-06: false when the student turned off this task's reminders. */
+  remindersEnabled: boolean;
 }
 
 const pad = (value: number) => String(value).padStart(2, '0');

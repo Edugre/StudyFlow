@@ -17,6 +17,7 @@ import {
   findAssignment,
   listAssignments,
   recordGrade,
+  setAssignmentReminders,
 } from './assignment-api.js';
 
 const kindOptions = taskKinds.map((kind) => (
@@ -54,6 +55,7 @@ export function TasksPage() {
  * AT-08: a task can be deleted after confirming.
  * AT-09: open tasks with future deadlines are listed earliest first.
  * AT-10: a completed task can record a 0–100% grade.
+ * RN-06: reminders can be turned off for one open task at a time.
  */
 function TaskList() {
   const [tasks, setTasks] = useState<Assignment[]>([]);
@@ -306,6 +308,12 @@ function TaskList() {
                   : 'Not completed'}
               </dd>
             </div>
+            {!selected.completedAt && (
+              <div>
+                <dt>Reminders</dt>
+                <dd>{selected.remindersEnabled ? 'On' : 'Off'}</dd>
+              </div>
+            )}
             {selected.completedAt && (
               <div>
                 <dt>Grade</dt>
@@ -347,6 +355,29 @@ function TaskList() {
               }
             >
               {busy ? 'Saving…' : 'Mark completed'}
+            </button>
+          )}
+          {!selected.completedAt && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                saveTask(
+                  () =>
+                    setAssignmentReminders(
+                      supabase,
+                      selected.id,
+                      !selected.remindersEnabled,
+                    ),
+                  selected.remindersEnabled
+                    ? 'Reminders turned off for this task.'
+                    : 'Reminders turned on for this task.',
+                )
+              }
+            >
+              {selected.remindersEnabled
+                ? 'Turn off reminders'
+                : 'Turn on reminders'}
             </button>
           )}
           {editing ? (
