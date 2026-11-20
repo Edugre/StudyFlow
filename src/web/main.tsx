@@ -29,6 +29,13 @@ const NotificationsPage = lazy(() =>
     default: module.NotificationsPage,
   })),
 );
+
+const GoalsPage = lazy(() =>
+  import('./features/goals/GoalsPage.js').then((module) => ({
+    default: module.GoalsPage,
+  })),
+);
+
 const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL &&
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -121,7 +128,7 @@ createRoot(document.getElementById('root')!).render(
             path="/goals"
             element={
               <Workspace name="Goals">
-                Goals
+                <GoalsPage />
               </Workspace>
             }
           />
