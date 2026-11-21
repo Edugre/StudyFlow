@@ -1,0 +1,123 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import type { Assignment } from '../src/shared/assignment.js';
+import { completedSessions, taskProgress } from '../src/shared/progress.js';
+import type { StudySession } from '../src/shared/study-session.js';
+import {
+  completeAssignment,
+  createAssignment,
+} from '../src/web/features/assignments/assignment-api.js';
+import {
+  cancelStudySession,
+  completeStudySession,
+  createStudySession,
+} from '../src/web/features/study-sessions/session-api.js';
+import { loadProgress } from '../src/web/features/progress/progress-api.js';
+import { account, stack } from './support/supabase.js';
+
+const task = (id: string, completedAt: string | null): Assignment => ({
+  id,
+  title: id,
+  courseId: null,
+  kind: 'assignment',
+  priority: 'medium',
+  dueDate: null,
+  dueTime: null,
+  completedAt,
+  grade: null,
+  remindersEnabled: true,
+});
+const done = '2026-11-20T12:00:00Z';
+
+test('GP-06: tasks are counted as completed or incomplete', () => {
+  const tasks = [
+    task('a', done),
+    task('b', done),
+    task('c', done),
+    task('d', null),
+    task('e', null),
+  ];
+  assert.deepEqual(taskProgress(tasks), { completed: 3, incomplete: 2 });
+  assert.deepEqual(taskProgress([]), { completed: 0, incomplete: 0 });
+});
+
+test(
+  'GP-06: assignment progress follows completed tasks',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    assert.deepEqual((await loadProgress(student)).tasks, {
+      completed: 0,
+      incomplete: 0,
+    });
+    const tasks = [];
+    for (const title of ['Essay', 'Lab', 'Quiz', 'Exam', 'Project'])
+      tasks.push(await createAssignment(student, { title }));
+    for (const saved of tasks.slice(0, 3))
+      await completeAssignment(student, saved.id);
+    assert.deepEqual((await loadProgress(student)).tasks, {
+      completed: 3,
+      incomplete: 2,
+    });
+    await completeAssignment(student, tasks[3]!.id);
+    assert.deepEqual((await loadProgress(student)).tasks, {
+      completed: 4,
+      incomplete: 1,
+    });
+    const other = await account();
+    assert.deepEqual((await loadProgress(other)).tasks, {
+      completed: 0,
+      incomplete: 0,
+    });
+  },
+);
+
+const session = (
+  id: string,
+  completedAt: string | null,
+  canceledAt: string | null = null,
+): StudySession => ({
+  id,
+  courseId: null,
+  date: '2026-11-12',
+  startTime: '18:00',
+  durationMinutes: 60,
+  objective: null,
+  assignmentId: null,
+  completedAt,
+  canceledAt,
+});
+
+test('GP-07: only completed sessions count, never canceled ones', () => {
+  const sessions = [
+    session('a', done),
+    session('b', done),
+    session('c', done),
+    session('d', null),
+    session('e', null),
+    session('canceled', null, done),
+  ];
+  assert.equal(completedSessions(sessions), 3);
+  assert.equal(completedSessions([]), 0);
+});
+
+const slot = { date: '2026-11-12', startTime: '18:00', durationMinutes: 60 };
+
+test(
+  'GP-07: the completed-session count follows completions',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    assert.equal((await loadProgress(student)).completedSessions, 0);
+    const sessions = [];
+    for (let i = 0; i < 5; i++)
+      sessions.push(await createStudySession(student, slot));
+    for (const saved of sessions.slice(0, 3))
+      await completeStudySession(student, saved.id);
+    assert.equal((await loadProgress(student)).completedSessions, 3);
+    await completeStudySession(student, sessions[3]!.id);
+    assert.equal((await loadProgress(student)).completedSessions, 4);
+    await cancelStudySession(student, sessions[4]!.id);
+    assert.equal((await loadProgress(student)).completedSessions, 4);
+  },
+);
