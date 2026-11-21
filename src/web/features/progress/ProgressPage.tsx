@@ -8,7 +8,7 @@ import { loadProgress, type Progress, type Scope } from './progress-api.js';
 export function ProgressPage() {
   return (
     <>
-      <h1>Progress</h1>
+      <h1>Progress dashboard</h1>
       <AuthGate>{() => <ProgressWorkspace />}</AuthGate>
     </>
   );
@@ -27,7 +27,10 @@ const optionalDate = (value: FormDataEntryValue | null) =>
  * GP-07: how many study sessions are completed; canceled ones don't count.
  * GP-08: planned versus completed study time, optionally for a period.
  * GP-09: everything can be narrowed to one course, with its linked goals.
- * Refreshing recomputes everything from the saved records.
+ * GP-10: one dashboard with all of these and the goals' progress.
+ * Refreshing recomputes everything from the saved records, so the figures
+ * always agree with them; an account without records shows zeros and empty
+ * states.
  */
 function ProgressWorkspace() {
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -122,6 +125,9 @@ function ProgressWorkspace() {
                 <dd>{progress.tasks.incomplete}</dd>
               </div>
             </dl>
+            {progress.tasks.completed + progress.tasks.incomplete === 0 && (
+              <p>No tasks yet.</p>
+            )}
           </section>
           <section aria-labelledby="study-progress">
             <h2 id="study-progress">Study sessions</h2>
@@ -165,11 +171,35 @@ function ProgressWorkspace() {
           </section>
           <section aria-labelledby="goal-progress">
             <h2 id="goal-progress">Goals</h2>
+            <dl className="course-details">
+              <div>
+                <dt>Completed</dt>
+                <dd>{progress.goalProgress.completed}</dd>
+              </div>
+              <div>
+                <dt>Active</dt>
+                <dd>{progress.goalProgress.active}</dd>
+              </div>
+              <div>
+                <dt>Average progress</dt>
+                <dd>
+                  {progress.goalProgress.averagePercent === null
+                    ? 'No goals'
+                    : `${progress.goalProgress.averagePercent}%`}
+                </dd>
+              </div>
+            </dl>
             {progress.goals.length ? (
               <ul>
                 {progress.goals.map((goal) => (
                   <li key={goal.id}>
-                    {goal.title}: {goal.progress}%
+                    {goal.title}:{' '}
+                    <progress
+                      max={100}
+                      value={goal.progress}
+                      aria-hidden="true"
+                    />{' '}
+                    {goal.progress}%
                     {goal.completedAt && (
                       <>
                         {' '}

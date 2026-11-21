@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type { Assignment } from '../src/shared/assignment.js';
 import {
   completedSessions,
+  goalProgress,
   periodError,
   studyTime,
   taskProgress,
@@ -21,7 +22,9 @@ import { createCourse } from '../src/web/features/courses/course-api.js';
 import {
   completeGoal,
   createGoal,
+  setGoalProgress,
 } from '../src/web/features/goals/goal-api.js';
+import type { Goal } from '../src/shared/goal.js';
 import { loadProgress } from '../src/web/features/progress/progress-api.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { account, stack } from './support/supabase.js';
@@ -300,10 +303,94 @@ test(
       completedSessions: 0,
       studyTime: { plannedMinutes: 0, completedMinutes: 0 },
       goals: [],
+      goalProgress: { completed: 0, active: 0, averagePercent: null },
     });
     await assert.rejects(
       loadProgress(student, { courseId: 'not-an-id' }),
       /Course not found/,
     );
+  },
+);
+
+test('GP-10: goal progress counts goals and averages their progress', () => {
+  const goal = (progress: number, completedAt: string | null): Goal => ({
+    id: String(progress),
+    title: 'Goal',
+    message: 'Goal',
+    targetDate: null,
+    courseId: null,
+    progress,
+    completedAt,
+    createdAt: done,
+  });
+  assert.deepEqual(
+    goalProgress([goal(100, done), goal(25, null), goal(0, null)]),
+    {
+      completed: 1,
+      active: 2,
+      averagePercent: 42,
+    },
+  );
+  assert.deepEqual(goalProgress([]), {
+    completed: 0,
+    active: 0,
+    averagePercent: null,
+  });
+});
+
+test(
+  'GP-10: the dashboard agrees with the saved records after refreshing',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    assert.deepEqual(await loadProgress(student), {
+      tasks: { completed: 0, incomplete: 0 },
+      completedSessions: 0,
+      studyTime: { plannedMinutes: 0, completedMinutes: 0 },
+      goals: [],
+      goalProgress: { completed: 0, active: 0, averagePercent: null },
+    });
+
+    const essay = await createAssignment(student, { title: 'Essay' });
+    await createAssignment(student, { title: 'Lab' });
+    const hour = await createStudySession(student, slot);
+    await createStudySession(student, { ...slot, durationMinutes: 30 });
+    const calculus = await createGoal(student, {
+      title: 'Pass calculus',
+      message: 'Score a B',
+    });
+    const reading = await createGoal(student, {
+      title: 'Read',
+      message: 'Two books',
+    });
+    await setGoalProgress(student, reading.id, 50);
+    let dashboard = await loadProgress(student);
+    assert.deepEqual(dashboard.tasks, { completed: 0, incomplete: 2 });
+    assert.equal(dashboard.completedSessions, 0);
+    assert.deepEqual(dashboard.studyTime, {
+      plannedMinutes: 90,
+      completedMinutes: 0,
+    });
+    assert.deepEqual(dashboard.goalProgress, {
+      completed: 0,
+      active: 2,
+      averagePercent: 25,
+    });
+
+    await completeAssignment(student, essay.id);
+    await completeStudySession(student, hour.id);
+    await completeGoal(student, calculus.id);
+    dashboard = await loadProgress(student);
+    assert.deepEqual(dashboard.tasks, { completed: 1, incomplete: 1 });
+    assert.equal(dashboard.completedSessions, 1);
+    assert.deepEqual(dashboard.studyTime, {
+      plannedMinutes: 90,
+      completedMinutes: 60,
+    });
+    assert.deepEqual(dashboard.goalProgress, {
+      completed: 1,
+      active: 1,
+      averagePercent: 75,
+    });
   },
 );

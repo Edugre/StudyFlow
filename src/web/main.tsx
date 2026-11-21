@@ -74,7 +74,7 @@ createRoot(document.getElementById('root')!).render(
           <Link to="/settings">Settings</Link>
           <Link to="/notifications">Notifications</Link>
           <Link to="/goals">Goals</Link>
-          <Link to="/progress">Progress</Link>
+          <Link to="/progress">Dashboard</Link>
         </nav>
       </header>
       <main>
@@ -87,7 +87,10 @@ createRoot(document.getElementById('root')!).render(
                 <p>
                   Organize courses, assignments, and study time with StudyFlow.
                 </p>
-                <Link to="/courses">Course workspace</Link>
+                <p>
+                  <Link to="/progress">Progress dashboard</Link> ·{' '}
+                  <Link to="/courses">Course workspace</Link>
+                </p>
               </>
             }
           />
@@ -142,7 +145,7 @@ createRoot(document.getElementById('root')!).render(
           <Route
             path="/progress"
             element={
-              <Workspace name="Progress reports">
+              <Workspace name="Progress dashboards">
                 <ProgressPage />
               </Workspace>
             }
