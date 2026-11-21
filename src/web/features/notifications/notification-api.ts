@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type Notification = {
   id: string;
-  source_type: 'assignment' | 'exam' | 'study_session';
+  source_type: 'assignment' | 'exam' | 'study_session' | 'overdue';
   source_id: string;
   scheduled_for: string;
   title: string;
@@ -11,14 +11,20 @@ export type Notification = {
   read_at: string | null;
 };
 
-/** Retrieves the signed-in student's notifications, newest first. */
+/**
+ * RN-08: the signed-in student's notifications, newest first. One reminder
+ * check creates its notifications with the same time, so those are ordered
+ * by the event time they were scheduled for, latest first.
+ */
 export async function listNotifications(client: SupabaseClient) {
   const { data, error } = await client
     .from('notifications')
     .select(
       'id, source_type, source_id, scheduled_for, title, message, created_at, read_at',
     )
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('scheduled_for', { ascending: false })
+    .order('id');
 
   if (error) throw new Error('Unable to load notifications.');
 
