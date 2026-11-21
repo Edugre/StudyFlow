@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Assignment } from '../src/shared/assignment.js';
-import { taskProgress } from '../src/shared/progress.js';
+import { completedSessions, taskProgress } from '../src/shared/progress.js';
+import type { StudySession } from '../src/shared/study-session.js';
 import {
   completeAssignment,
   createAssignment,
 } from '../src/web/features/assignments/assignment-api.js';
+import {
+  cancelStudySession,
+  completeStudySession,
+  createStudySession,
+} from '../src/web/features/study-sessions/session-api.js';
 import { loadProgress } from '../src/web/features/progress/progress-api.js';
 import { account, stack } from './support/supabase.js';
 
@@ -63,5 +69,55 @@ test(
       completed: 0,
       incomplete: 0,
     });
+  },
+);
+
+const session = (
+  id: string,
+  completedAt: string | null,
+  canceledAt: string | null = null,
+): StudySession => ({
+  id,
+  courseId: null,
+  date: '2026-11-12',
+  startTime: '18:00',
+  durationMinutes: 60,
+  objective: null,
+  assignmentId: null,
+  completedAt,
+  canceledAt,
+});
+
+test('GP-07: only completed sessions count, never canceled ones', () => {
+  const sessions = [
+    session('a', done),
+    session('b', done),
+    session('c', done),
+    session('d', null),
+    session('e', null),
+    session('canceled', null, done),
+  ];
+  assert.equal(completedSessions(sessions), 3);
+  assert.equal(completedSessions([]), 0);
+});
+
+const slot = { date: '2026-11-12', startTime: '18:00', durationMinutes: 60 };
+
+test(
+  'GP-07: the completed-session count follows completions',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    assert.equal((await loadProgress(student)).completedSessions, 0);
+    const sessions = [];
+    for (let i = 0; i < 5; i++)
+      sessions.push(await createStudySession(student, slot));
+    for (const saved of sessions.slice(0, 3))
+      await completeStudySession(student, saved.id);
+    assert.equal((await loadProgress(student)).completedSessions, 3);
+    await completeStudySession(student, sessions[3]!.id);
+    assert.equal((await loadProgress(student)).completedSessions, 4);
+    await cancelStudySession(student, sessions[4]!.id);
+    assert.equal((await loadProgress(student)).completedSessions, 4);
   },
 );
