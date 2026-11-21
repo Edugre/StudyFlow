@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { durationText } from '../../../shared/study-session.js';
 import { supabase } from '../../lib/supabase.js';
 import { AuthGate } from '../auth/AuthGate.js';
+import { listCourses, type SavedCourse } from '../courses/course-api.js';
 import { loadProgress, type Progress, type Scope } from './progress-api.js';
 
 export function ProgressPage() {
@@ -25,11 +26,13 @@ const optionalDate = (value: FormDataEntryValue | null) =>
  * GP-06: how many tasks are completed and how many are not.
  * GP-07: how many study sessions are completed; canceled ones don't count.
  * GP-08: planned versus completed study time, optionally for a period.
+ * GP-09: everything can be narrowed to one course, with its linked goals.
  * Refreshing recomputes everything from the saved records.
  */
 function ProgressWorkspace() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [scope, setScope] = useState<Scope>({});
+  const [courses, setCourses] = useState<SavedCourse[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -48,7 +51,14 @@ function ProgressWorkspace() {
 
   useEffect(() => {
     void refresh({});
+    listCourses(supabase)
+      .then(setCourses)
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : 'Unable to load courses.'),
+      );
   }, [refresh]);
+
+  const course = courses.find((item) => item.id === scope.courseId);
 
   function choosePeriod(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,9 +82,32 @@ function ProgressWorkspace() {
   return (
     <>
       {error && <p role="alert">{error}</p>}
+      {courses.length > 0 && (
+        <label>
+          Show progress for
+          <select
+            value={scope.courseId ?? ''}
+            disabled={busy}
+            onChange={(event) =>
+              void refresh({
+                ...scope,
+                courseId: event.target.value || undefined,
+              })
+            }
+          >
+            <option value="">All courses</option>
+            {courses.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <button type="button" disabled={busy} onClick={() => void refresh(scope)}>
         {busy ? 'Refreshing…' : 'Refresh progress'}
       </button>
+      {course && progress && <h2>Progress for {course.name}</h2>}
       {progress ? (
         <>
           <section aria-labelledby="task-progress">
@@ -129,6 +162,30 @@ function ProgressWorkspace() {
                 out.
               </small>
             </p>
+          </section>
+          <section aria-labelledby="goal-progress">
+            <h2 id="goal-progress">Goals</h2>
+            {progress.goals.length ? (
+              <ul>
+                {progress.goals.map((goal) => (
+                  <li key={goal.id}>
+                    {goal.title}: {goal.progress}%
+                    {goal.completedAt && (
+                      <>
+                        {' '}
+                        <span className="tag">Completed</span>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>
+                {scope.courseId
+                  ? 'No goals are linked to this course.'
+                  : 'No goals yet.'}
+              </p>
+            )}
           </section>
         </>
       ) : (

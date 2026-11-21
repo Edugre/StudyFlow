@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Goal } from '../../../shared/goal.js';
 import {
   checkPeriod,
   completedSessions,
@@ -8,7 +9,9 @@ import {
   type StudyTime,
   type TaskProgress,
 } from '../../../shared/progress.js';
+import { isId } from '../../lib/linked-course.js';
 import { listAssignments } from '../assignments/assignment-api.js';
+import { listGoals } from '../goals/goal-api.js';
 import { listStudySessions } from '../study-sessions/session-api.js';
 
 export interface Progress {
@@ -18,10 +21,16 @@ export interface Progress {
   completedSessions: number;
   /** GP-08: planned versus completed study time in the viewed period. */
   studyTime: StudyTime;
+  /** GP-09: the goals in scope, newest first. */
+  goals: Goal[];
 }
 
-/** What progress covers: GP-08's period applies to study time. */
-export type Scope = Period;
+/**
+ * What progress covers. GP-09: with a course, every figure counts only that
+ * course's tasks, sessions and goals. GP-08: the period applies to study
+ * time.
+ */
+export type Scope = Period & { courseId?: string };
 
 /**
  * Loads the student's records and computes their progress. An invalid
@@ -32,13 +41,18 @@ export async function loadProgress(
   scope: Scope = {},
 ): Promise<Progress> {
   checkPeriod(scope);
-  const [tasks, sessions] = await Promise.all([
-    listAssignments(client),
-    listStudySessions(client),
+  const { courseId } = scope;
+  if (courseId !== undefined && !isId(courseId))
+    throw new Error('Course not found');
+  const [tasks, sessions, goals] = await Promise.all([
+    listAssignments(client, courseId),
+    listStudySessions(client, courseId),
+    listGoals(client, courseId),
   ]);
   return {
     tasks: taskProgress(tasks),
     completedSessions: completedSessions(sessions),
     studyTime: studyTime(sessions, scope),
+    goals,
   };
 }
