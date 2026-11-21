@@ -138,16 +138,10 @@ function GoalsWorkspace() {
           )}
 
           {selected && (
-            <GoalDetails
-              goal={selected}
-              busy={busy}
-              onDelete={handleDelete}
-            />
+            <GoalDetails goal={selected} busy={busy} onDelete={handleDelete} />
           )}
         </>
       )}
     </>
   );
 }
-
-

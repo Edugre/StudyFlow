@@ -51,12 +51,12 @@ export async function createGoal(
 }
 
 export async function deleteGoal(client: SupabaseClient, id: string) {
-    const { data, error } = await client
-        .from('goals')
-        .delete()
-        .eq('id', id)
-        .select('id');
-    if (error?.code === '22P02') return false;
-    if (error) throw new Error('Unable to delete goal.');
-    return data.length > 0;
+  const { data, error } = await client
+    .from('goals')
+    .delete()
+    .eq('id', id)
+    .select('id');
+  if (error?.code === '22P02') return false;
+  if (error) throw new Error('Unable to delete goal.');
+  return data.length > 0;
 }

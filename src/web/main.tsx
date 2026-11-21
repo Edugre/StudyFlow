@@ -124,7 +124,7 @@ createRoot(document.getElementById('root')!).render(
               </Workspace>
             }
           />
-          <Route 
+          <Route
             path="/goals"
             element={
               <Workspace name="Goals">
