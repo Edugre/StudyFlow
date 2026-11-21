@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Assignment } from '../src/shared/assignment.js';
-import { completedSessions, taskProgress } from '../src/shared/progress.js';
+import {
+  completedSessions,
+  periodError,
+  studyTime,
+  taskProgress,
+} from '../src/shared/progress.js';
 import type { StudySession } from '../src/shared/study-session.js';
 import {
   completeAssignment,
@@ -13,6 +18,7 @@ import {
   createStudySession,
 } from '../src/web/features/study-sessions/session-api.js';
 import { loadProgress } from '../src/web/features/progress/progress-api.js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { account, stack } from './support/supabase.js';
 
 const task = (id: string, completedAt: string | null): Assignment => ({
@@ -119,5 +125,99 @@ test(
     assert.equal((await loadProgress(student)).completedSessions, 4);
     await cancelStudySession(student, sessions[4]!.id);
     assert.equal((await loadProgress(student)).completedSessions, 4);
+  },
+);
+
+test('GP-08: planned and completed study time in a period', () => {
+  const at = (
+    id: string,
+    date: string,
+    durationMinutes: number,
+    completedAt: string | null,
+    canceledAt: string | null = null,
+  ) => ({ ...session(id, completedAt, canceledAt), date, durationMinutes });
+  const sessions = [
+    at('done', '2026-11-10', 60, done),
+    at('planned', '2026-11-12', 30, null),
+    at('canceled', '2026-11-11', 120, null, done),
+    at('earlier', '2026-10-01', 45, done),
+  ];
+  assert.deepEqual(
+    studyTime(sessions, { from: '2026-11-09', to: '2026-11-15' }),
+    { plannedMinutes: 90, completedMinutes: 60 },
+  );
+  assert.deepEqual(studyTime(sessions), {
+    plannedMinutes: 135,
+    completedMinutes: 105,
+  });
+  assert.deepEqual(studyTime(sessions, { to: '2026-10-31' }), {
+    plannedMinutes: 45,
+    completedMinutes: 45,
+  });
+  assert.deepEqual(studyTime(sessions, { from: '2026-12-01' }), {
+    plannedMinutes: 0,
+    completedMinutes: 0,
+  });
+  assert.deepEqual(studyTime([]), { plannedMinutes: 0, completedMinutes: 0 });
+});
+
+test('GP-08: an invalid period is rejected before loading', async () => {
+  const offline = new Proxy({} as SupabaseClient, {
+    get() {
+      throw new Error('Unexpected network access');
+    },
+  });
+  for (const period of [
+    { from: '2026-02-30' },
+    { to: 'next week' },
+    { from: '2026-11-15', to: '2026-11-09' },
+  ])
+    await assert.rejects(
+      loadProgress(offline, period),
+      { message: periodError },
+      JSON.stringify(period),
+    );
+});
+
+test(
+  'GP-08: study time compares planned with completed durations',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const week = { from: '2026-11-09', to: '2026-11-15' };
+    assert.deepEqual((await loadProgress(student, week)).studyTime, {
+      plannedMinutes: 0,
+      completedMinutes: 0,
+    });
+    const hour = await createStudySession(student, {
+      date: '2026-11-10',
+      startTime: '18:00',
+      durationMinutes: 60,
+    });
+    await createStudySession(student, {
+      date: '2026-11-12',
+      startTime: '09:00',
+      durationMinutes: 30,
+    });
+    const canceled = await createStudySession(student, {
+      date: '2026-11-11',
+      startTime: '09:00',
+      durationMinutes: 120,
+    });
+    await createStudySession(student, {
+      date: '2026-11-20',
+      startTime: '09:00',
+      durationMinutes: 45,
+    });
+    await completeStudySession(student, hour.id);
+    await cancelStudySession(student, canceled.id);
+    assert.deepEqual((await loadProgress(student, week)).studyTime, {
+      plannedMinutes: 90,
+      completedMinutes: 60,
+    });
+    assert.deepEqual((await loadProgress(student)).studyTime, {
+      plannedMinutes: 135,
+      completedMinutes: 60,
+    });
   },
 );
