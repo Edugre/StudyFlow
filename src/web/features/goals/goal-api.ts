@@ -4,8 +4,8 @@ import type { Goal } from '../../../shared/goal.js';
 import { courseLink, isId } from '../../lib/linked-course.js';
 
 /**
- * Academic goal data access (GP-01) with target dates (GP-02) and course
- * links (GP-03). Ownership is enforced by row level security.
+ * Academic goal data access (GP-01) with target dates (GP-02), course
+ * links (GP-03) and progress (GP-04). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
@@ -13,15 +13,18 @@ type Row = {
   message: string;
   target_date: string | null;
   course_id: string | null;
+  progress: number;
   created_at: string;
 };
-const columns = 'id, title, message, target_date, course_id, created_at';
+const columns =
+  'id, title, message, target_date, course_id, progress, created_at';
 const toGoal = (row: Row): Goal => ({
   id: row.id,
   title: row.title,
   message: row.message,
   targetDate: row.target_date,
   courseId: row.course_id,
+  progress: row.progress,
   createdAt: row.created_at,
 });
 
@@ -151,6 +154,27 @@ export async function setGoalCourse(
   courseId: unknown,
 ) {
   return updateGoal(client, id, { course_id: courseLink(courseId) });
+}
+
+export const progressError = 'Enter progress as a whole number from 0 to 100.';
+
+/**
+ * GP-04: saves the goal's progress as a whole percentage from 0 through 100.
+ * Nonnumeric, fractional or out-of-range values are rejected before the
+ * request, so the saved percentage stays.
+ */
+export async function setGoalProgress(
+  client: SupabaseClient,
+  id: string,
+  progress: unknown,
+) {
+  if (
+    !Number.isInteger(progress) ||
+    (progress as number) < 0 ||
+    (progress as number) > 100
+  )
+    throw new Error(progressError);
+  return updateGoal(client, id, { progress: progress as number });
 }
 
 export async function deleteGoal(client: SupabaseClient, id: string) {

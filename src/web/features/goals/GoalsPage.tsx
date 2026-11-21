@@ -20,6 +20,7 @@ export function GoalsPage() {
  * GP-02: a goal can have a target date.
  * GP-03: a goal can be linked to a course, and the list can show only one
  * course's goals.
+ * GP-04: each goal shows its progress.
  */
 function GoalsWorkspace() {
   const [ready, setReady] = useState(false);
@@ -178,7 +179,8 @@ function GoalsWorkspace() {
                     onClick={() => setSelected(goal)}
                   >
                     {goal.title}
-                  </button>
+                  </button>{' '}
+                  {goal.progress}%
                   {courseName(goal) && (
                     <>
                       {' '}
