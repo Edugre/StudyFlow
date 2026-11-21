@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { completedGoals } from '../src/shared/goal.js';
 import {
+  completedProgressError,
+  completeGoal,
   createGoal,
   deleteGoal,
   findGoal,
@@ -282,5 +285,54 @@ test(
       /Goal not found/,
     );
     assert.equal((await findGoal(owner, saved.id))?.progress, 0);
+  },
+);
+
+test(
+  'GP-05: a completed goal shows completed after reopening',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const saved = await createGoal(student, goal);
+    assert.equal(saved.completedAt, null);
+    await setGoalProgress(student, saved.id, 40);
+    const completed = await completeGoal(student, saved.id);
+    assert.ok(completed.completedAt);
+    assert.equal(completed.progress, 100);
+    const reopened = await findGoal(student, saved.id);
+    assert.equal(reopened?.completedAt, completed.completedAt);
+    assert.equal(reopened?.progress, 100);
+  },
+);
+
+test(
+  'GP-05: completing again keeps a single completed goal',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const saved = await createGoal(student, goal);
+    await createGoal(student, { title: 'Read', message: 'Two books' });
+    const first = await completeGoal(student, saved.id);
+    const again = await completeGoal(student, saved.id);
+    assert.equal(again.completedAt, first.completedAt);
+    const goals = await listGoals(student);
+    assert.equal(goals.length, 2);
+    assert.equal(completedGoals(goals), 1);
+    await assert.rejects(setGoalProgress(student, saved.id, 50), {
+      message: completedProgressError,
+    });
+    assert.equal((await findGoal(student, saved.id))?.progress, 100);
+  },
+);
+
+test(
+  'GP-05: another student cannot complete the goal',
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const saved = await createGoal(owner, goal);
+    await assert.rejects(completeGoal(other, saved.id), /Goal not found/);
+    assert.equal((await findGoal(owner, saved.id))?.completedAt, null);
   },
 );
