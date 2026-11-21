@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { isId } from '../../lib/linked-course.js';
 
 export type Goal = {
   id: string;
@@ -18,6 +19,18 @@ export async function listGoals(client: SupabaseClient) {
   if (error) throw new Error('Unable to load goals.');
 
   return (data ?? []) as Goal[];
+}
+
+/** GP-01: reopens one of the student's goals, or null if it isn't theirs. */
+export async function findGoal(client: SupabaseClient, id: string) {
+  if (!isId(id)) return null;
+  const { data, error } = await client
+    .from('goals')
+    .select(columns)
+    .eq('id', id)
+    .maybeSingle<Goal>();
+  if (error) throw new Error('Unable to load goals.');
+  return data;
 }
 
 export async function createGoal(
