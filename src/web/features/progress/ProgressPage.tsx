@@ -13,8 +13,9 @@ export function ProgressPage() {
 }
 
 /**
- * GP-06: how many tasks are completed and how many are not. Refreshing
- * recomputes the counts from the saved records.
+ * GP-06: how many tasks are completed and how many are not.
+ * GP-07: how many study sessions are completed; canceled ones don't count.
+ * Refreshing recomputes everything from the saved records.
  */
 function ProgressWorkspace() {
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -44,19 +45,30 @@ function ProgressWorkspace() {
         {busy ? 'Refreshing…' : 'Refresh progress'}
       </button>
       {progress ? (
-        <section aria-labelledby="task-progress">
-          <h2 id="task-progress">Assignments</h2>
-          <dl className="course-details">
-            <div>
-              <dt>Completed</dt>
-              <dd>{progress.tasks.completed}</dd>
-            </div>
-            <div>
-              <dt>Incomplete</dt>
-              <dd>{progress.tasks.incomplete}</dd>
-            </div>
-          </dl>
-        </section>
+        <>
+          <section aria-labelledby="task-progress">
+            <h2 id="task-progress">Assignments</h2>
+            <dl className="course-details">
+              <div>
+                <dt>Completed</dt>
+                <dd>{progress.tasks.completed}</dd>
+              </div>
+              <div>
+                <dt>Incomplete</dt>
+                <dd>{progress.tasks.incomplete}</dd>
+              </div>
+            </dl>
+          </section>
+          <section aria-labelledby="study-progress">
+            <h2 id="study-progress">Study sessions</h2>
+            <dl className="course-details">
+              <div>
+                <dt>Completed sessions</dt>
+                <dd>{progress.completedSessions}</dd>
+              </div>
+            </dl>
+          </section>
+        </>
       ) : (
         !error && <p>Loading progress…</p>
       )}

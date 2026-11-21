@@ -1,4 +1,5 @@
 import type { Assignment } from './assignment.js';
+import type { StudySession } from './study-session.js';
 
 /**
  * Progress metrics, computed from the student's saved records so they always
@@ -14,3 +15,13 @@ export function taskProgress(tasks: Assignment[]): TaskProgress {
   const completed = tasks.filter((task) => task.completedAt !== null).length;
   return { completed, incomplete: tasks.length - completed };
 }
+
+/**
+ * GP-07: how many of these study sessions are completed. A session is
+ * completed or canceled, never both, but canceled sessions are left out
+ * explicitly so they can never count as completed.
+ */
+export const completedSessions = (sessions: StudySession[]) =>
+  sessions.filter(
+    (session) => session.completedAt !== null && session.canceledAt === null,
+  ).length;
