@@ -9,5 +9,11 @@ export interface Goal {
   courseId: string | null;
   /** GP-04: how close the goal is to done, a whole percentage 0–100. */
   progress: number;
+  /** GP-05: when the goal was marked completed, or null while it is active. */
+  completedAt: string | null;
   createdAt: string;
 }
+
+/** GP-05: how many of these goals are completed; each counts once. */
+export const completedGoals = (goals: Goal[]) =>
+  goals.filter((goal) => goal.completedAt !== null).length;

@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from 'react';
 import type { Goal } from '../../../shared/goal.js';
 import {
+  completeGoal,
   setGoalCourse,
   setGoalProgress,
   setGoalTargetDate,
@@ -27,6 +28,7 @@ const field = (event: FormEvent<HTMLFormElement>, name: string) =>
  * GP-02: its target date can be set, changed or cleared.
  * GP-03: it can be linked to a course, moved to another, or unlinked.
  * GP-04: its progress can be updated as a percentage from 0 through 100.
+ * GP-05: it can be marked completed, once; it then stays at 100%.
  */
 export function GoalDetails({
   goal,
@@ -71,6 +73,14 @@ export function GoalDetails({
       <p>{goal.message}</p>
       <dl className="course-details">
         <div>
+          <dt>Status</dt>
+          <dd>
+            {goal.completedAt
+              ? `Completed ${new Date(goal.completedAt).toLocaleString()}`
+              : 'Active'}
+          </dd>
+        </div>
+        <div>
           <dt>Progress</dt>
           <dd>
             <progress max={100} value={goal.progress} aria-hidden="true" />{' '}
@@ -90,23 +100,36 @@ export function GoalDetails({
           <dd>{new Date(goal.createdAt).toLocaleString()}</dd>
         </div>
       </dl>
-      <form
-        key={`progress-${goal.id}-${goal.progress}`}
-        onSubmit={saveProgress}
-      >
-        <label>
-          Progress (%)
-          <input
-            name="progress"
-            type="number"
-            min={0}
-            max={100}
-            step={1}
-            defaultValue={goal.progress}
-          />
-        </label>
-        <button disabled={busy}>Save progress</button>
-      </form>
+      {!goal.completedAt && (
+        <>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              onUpdate(() => completeGoal(supabase, goal.id), 'Goal completed.')
+            }
+          >
+            Mark completed
+          </button>
+          <form
+            key={`progress-${goal.id}-${goal.progress}`}
+            onSubmit={saveProgress}
+          >
+            <label>
+              Progress (%)
+              <input
+                name="progress"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                defaultValue={goal.progress}
+              />
+            </label>
+            <button disabled={busy}>Save progress</button>
+          </form>
+        </>
+      )}
       <form key={`date-${goal.id}`} onSubmit={saveTargetDate}>
         <label>
           Target date (leave blank for none)

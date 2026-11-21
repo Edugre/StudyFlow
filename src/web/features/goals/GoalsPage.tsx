@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { Goal } from '../../../shared/goal.js';
+import { completedGoals, type Goal } from '../../../shared/goal.js';
 import { supabase } from '../../lib/supabase.js';
 import { AuthGate } from '../auth/AuthGate.js';
 import { listCourses, type SavedCourse } from '../courses/course-api.js';
@@ -21,6 +21,7 @@ export function GoalsPage() {
  * GP-03: a goal can be linked to a course, and the list can show only one
  * course's goals.
  * GP-04: each goal shows its progress.
+ * GP-05: completed goals are marked, and counted once.
  */
 function GoalsWorkspace() {
   const [ready, setReady] = useState(false);
@@ -169,6 +170,11 @@ function GoalsWorkspace() {
               </select>
             </label>
           )}
+          {shown.length > 0 && (
+            <p>
+              {completedGoals(shown)} of {shown.length} goals completed
+            </p>
+          )}
           {shown.length ? (
             <ul>
               {shown.map((goal) => (
@@ -181,6 +187,12 @@ function GoalsWorkspace() {
                     {goal.title}
                   </button>{' '}
                   {goal.progress}%
+                  {goal.completedAt && (
+                    <>
+                      {' '}
+                      <span className="tag">Completed</span>
+                    </>
+                  )}
                   {courseName(goal) && (
                     <>
                       {' '}

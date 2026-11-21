@@ -5,7 +5,7 @@ import { courseLink, isId } from '../../lib/linked-course.js';
 
 /**
  * Academic goal data access (GP-01) with target dates (GP-02), course
- * links (GP-03) and progress (GP-04). Ownership is enforced by row level security.
+ * links (GP-03), progress (GP-04) and completion (GP-05). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
@@ -14,10 +14,11 @@ type Row = {
   target_date: string | null;
   course_id: string | null;
   progress: number;
+  completed_at: string | null;
   created_at: string;
 };
 const columns =
-  'id, title, message, target_date, course_id, progress, created_at';
+  'id, title, message, target_date, course_id, progress, completed_at, created_at';
 const toGoal = (row: Row): Goal => ({
   id: row.id,
   title: row.title,
@@ -25,6 +26,7 @@ const toGoal = (row: Row): Goal => ({
   targetDate: row.target_date,
   courseId: row.course_id,
   progress: row.progress,
+  completedAt: row.completed_at,
   createdAt: row.created_at,
 });
 
@@ -158,10 +160,14 @@ export async function setGoalCourse(
 
 export const progressError = 'Enter progress as a whole number from 0 to 100.';
 
+export const completedProgressError =
+  'This goal is completed, so its progress stays at 100%.';
+
 /**
  * GP-04: saves the goal's progress as a whole percentage from 0 through 100.
  * Nonnumeric, fractional or out-of-range values are rejected before the
- * request, so the saved percentage stays.
+ * request, so the saved percentage stays. Completed goals (GP-05) stay at
+ * 100%.
  */
 export async function setGoalProgress(
   client: SupabaseClient,
@@ -174,7 +180,28 @@ export async function setGoalProgress(
     (progress as number) > 100
   )
     throw new Error(progressError);
-  return updateGoal(client, id, { progress: progress as number });
+  if (!isId(id)) throw new Error('Goal not found');
+  const { data, error } = await client
+    .from('goals')
+    .update({ progress })
+    .eq('id', id)
+    .is('completed_at', null)
+    .select(columns);
+  if (error) fail(error, 'save goal');
+  const [row] = data as Row[];
+  if (row) return toGoal(row);
+  // Nothing matched: either it is completed, or it isn't the student's.
+  if (await findGoal(client, id)) throw new Error(completedProgressError);
+  throw new Error('Goal not found');
+}
+
+/**
+ * GP-05: marks the goal completed, at 100%. The database records its own
+ * time and keeps the first completion, so repeating this changes nothing and
+ * the goal is counted once.
+ */
+export async function completeGoal(client: SupabaseClient, id: string) {
+  return updateGoal(client, id, { completed_at: new Date().toISOString() });
 }
 
 export async function deleteGoal(client: SupabaseClient, id: string) {
