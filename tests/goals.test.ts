@@ -6,7 +6,9 @@ import {
   deleteGoal,
   findGoal,
   listGoals,
+  progressError,
   setGoalCourse,
+  setGoalProgress,
   setGoalTargetDate,
   targetDateError,
 } from '../src/web/features/goals/goal-api.js';
@@ -228,5 +230,57 @@ test(
     const saved = await createGoal(student, { ...goal, courseId: math.id });
     await deleteCourse(student, math.id);
     assert.equal((await findGoal(student, saved.id))?.courseId, null);
+  },
+);
+
+test('GP-04: invalid progress is rejected before saving', async () => {
+  const id = '00000000-0000-4000-8000-000000000000';
+  for (const value of [-1, 101, 12.5, NaN, '50', null, undefined])
+    await assert.rejects(
+      setGoalProgress(offline, id, value),
+      { message: progressError },
+      String(value),
+    );
+});
+
+test(
+  'GP-04: saved progress appears after reopening',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const saved = await createGoal(student, goal);
+    assert.equal(saved.progress, 0);
+    for (const progress of [40, 0, 100]) {
+      await setGoalProgress(student, saved.id, progress);
+      assert.equal((await findGoal(student, saved.id))?.progress, progress);
+    }
+  },
+);
+
+test(
+  'GP-04: invalid progress keeps the previous percentage',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const saved = await createGoal(student, goal);
+    await setGoalProgress(student, saved.id, 40);
+    await assert.rejects(setGoalProgress(student, saved.id, 150));
+    await assert.rejects(setGoalProgress(student, saved.id, 'lots'));
+    assert.equal((await findGoal(student, saved.id))?.progress, 40);
+  },
+);
+
+test(
+  "GP-04: another student cannot change a goal's progress",
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const saved = await createGoal(owner, goal);
+    await assert.rejects(
+      setGoalProgress(other, saved.id, 90),
+      /Goal not found/,
+    );
+    assert.equal((await findGoal(owner, saved.id))?.progress, 0);
   },
 );
