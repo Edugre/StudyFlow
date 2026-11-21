@@ -1,5 +1,6 @@
 import type { Assignment } from './assignment.js';
 import { isDate } from './dates.js';
+import type { Goal } from './goal.js';
 import { plannedMinutes, type StudySession } from './study-session.js';
 
 /**
@@ -76,5 +77,27 @@ export function studyTime(
     completedMinutes: shown
       .filter((session) => session.completedAt !== null && !session.canceledAt)
       .reduce((total, session) => total + session.durationMinutes, 0),
+  };
+}
+
+export interface GoalProgress {
+  completed: number;
+  active: number;
+  /** Mean progress of the goals as a whole percentage, or null for none. */
+  averagePercent: number | null;
+}
+
+/** GP-10: how many goals are completed or active, and their mean progress. */
+export function goalProgress(goals: Goal[]): GoalProgress {
+  const completed = goals.filter((goal) => goal.completedAt !== null).length;
+  return {
+    completed,
+    active: goals.length - completed,
+    averagePercent: goals.length
+      ? Math.round(
+          goals.reduce((total, goal) => total + goal.progress, 0) /
+            goals.length,
+        )
+      : null,
   };
 }

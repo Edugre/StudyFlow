@@ -54,6 +54,14 @@ canceled after confirming, which moves it out of the schedule and planned
 time into a canceled list (SP-08). Upcoming study sessions lists the
 unfinished sessions that haven't started yet, earliest first (SP-10).
 
+`/goals` holds academic goals (GP-01) with an optional target date (GP-02)
+and course (GP-03), a progress percentage (GP-04), and completion, which
+keeps the goal at 100% and counts it once (GP-05). `/progress` is the
+progress dashboard (GP-10): completed and incomplete tasks (GP-06), completed
+study sessions (GP-07), planned versus completed study time for an optional
+period (GP-08), and goal progress, for all courses or one (GP-09). Its figures
+are computed from the saved records on each refresh, so nothing is stored.
+
 See [authentication and course management](docs/authentication.md) for auth,
 security choices and the database contract.
 

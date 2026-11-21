@@ -3,8 +3,10 @@ import type { Goal } from '../../../shared/goal.js';
 import {
   checkPeriod,
   completedSessions,
+  goalProgress,
   studyTime,
   taskProgress,
+  type GoalProgress,
   type Period,
   type StudyTime,
   type TaskProgress,
@@ -23,6 +25,8 @@ export interface Progress {
   studyTime: StudyTime;
   /** GP-09: the goals in scope, newest first. */
   goals: Goal[];
+  /** GP-10: completed and active goals, and their mean progress. */
+  goalProgress: GoalProgress;
 }
 
 /**
@@ -54,5 +58,6 @@ export async function loadProgress(
     completedSessions: completedSessions(sessions),
     studyTime: studyTime(sessions, scope),
     goals,
+    goalProgress: goalProgress(goals),
   };
 }
