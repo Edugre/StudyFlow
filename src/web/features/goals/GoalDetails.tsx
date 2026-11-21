@@ -1,10 +1,13 @@
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import type { Goal } from '../../../shared/goal.js';
-import { setGoalTargetDate } from './goal-api.js';
+import { setGoalCourse, setGoalTargetDate } from './goal-api.js';
 import { supabase } from '../../lib/supabase.js';
 
 type GoalDetailsProps = {
   goal: Goal;
+  /** The linked course's name, or null when the goal has none. */
+  courseName: string | null;
+  courseOptions: ReactNode;
   busy: boolean;
   onDelete: (goal: Goal) => void;
   /** Runs a change to the goal and shows the saved result, or its error. */
@@ -18,9 +21,12 @@ const field = (event: FormEvent<HTMLFormElement>, name: string) =>
 /**
  * GP-01: a reopened goal with its description.
  * GP-02: its target date can be set, changed or cleared.
+ * GP-03: it can be linked to a course, moved to another, or unlinked.
  */
 export function GoalDetails({
   goal,
+  courseName,
+  courseOptions,
   busy,
   onDelete,
   onUpdate,
@@ -34,6 +40,15 @@ export function GoalDetails({
     );
   }
 
+  function saveCourse(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = field(event, 'courseId');
+    onUpdate(
+      () => setGoalCourse(supabase, goal.id, value),
+      value ? 'Course saved.' : 'Goal unlinked from its course.',
+    );
+  }
+
   return (
     <section aria-label="Selected goal">
       <h2>{goal.title}</h2>
@@ -42,6 +57,10 @@ export function GoalDetails({
         <div>
           <dt>Target date</dt>
           <dd>{goal.targetDate ?? 'None'}</dd>
+        </div>
+        <div>
+          <dt>Course</dt>
+          <dd>{courseName ?? 'No course'}</dd>
         </div>
         <div>
           <dt>Created</dt>
@@ -58,6 +77,16 @@ export function GoalDetails({
           />
         </label>
         <button disabled={busy}>Save target date</button>
+      </form>
+      <form key={`course-${goal.id}`} onSubmit={saveCourse}>
+        <label>
+          Course
+          <select name="courseId" defaultValue={goal.courseId ?? ''}>
+            <option value="">No course</option>
+            {courseOptions}
+          </select>
+        </label>
+        <button disabled={busy}>Save course</button>
       </form>
       <button type="button" onClick={() => onDelete(goal)} disabled={busy}>
         {busy ? 'Working…' : 'Delete goal'}
