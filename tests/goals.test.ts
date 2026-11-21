@@ -6,6 +6,8 @@ import {
   deleteGoal,
   findGoal,
   listGoals,
+  setGoalTargetDate,
+  targetDateError,
 } from '../src/web/features/goals/goal-api.js';
 import { account, stack } from './support/supabase.js';
 
@@ -75,5 +77,74 @@ test(
     assert.deepEqual(await listGoals(owner), [saved]);
     assert.equal(await deleteGoal(owner, saved.id), true);
     assert.deepEqual(await listGoals(owner), []);
+  },
+);
+
+test('GP-02: an invalid target date is rejected before saving', async () => {
+  const id = '00000000-0000-4000-8000-000000000000';
+  for (const value of ['2026-02-30', '12/15/2026', 'soon', 20261215]) {
+    await assert.rejects(
+      setGoalTargetDate(offline, id, value),
+      { message: targetDateError },
+      JSON.stringify(value),
+    );
+    await assert.rejects(
+      createGoal(offline, { ...goal, targetDate: value }),
+      { message: targetDateError },
+      JSON.stringify(value),
+    );
+  }
+});
+
+test(
+  'GP-02: a saved target date appears after reopening',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const saved = await createGoal(student, goal);
+    assert.equal(saved.targetDate, null);
+    const dated = await setGoalTargetDate(student, saved.id, '2026-12-15');
+    assert.equal(dated.targetDate, '2026-12-15');
+    assert.equal((await findGoal(student, saved.id))?.targetDate, '2026-12-15');
+    const created = await createGoal(student, {
+      ...goal,
+      targetDate: '2027-01-10',
+    });
+    assert.equal(
+      (await findGoal(student, created.id))?.targetDate,
+      '2027-01-10',
+    );
+  },
+);
+
+test(
+  'GP-02: an invalid target date keeps the saved one',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const saved = await createGoal(student, {
+      ...goal,
+      targetDate: '2026-12-15',
+    });
+    await assert.rejects(setGoalTargetDate(student, saved.id, '2026-02-30'));
+    assert.equal((await findGoal(student, saved.id))?.targetDate, '2026-12-15');
+    const cleared = await setGoalTargetDate(student, saved.id, '');
+    assert.equal(cleared.targetDate, null);
+    assert.equal((await listGoals(student)).length, 1);
+  },
+);
+
+test(
+  "GP-02: another student cannot change a goal's target date",
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const saved = await createGoal(owner, goal);
+    await assert.rejects(
+      setGoalTargetDate(other, saved.id, '2030-01-01'),
+      /Goal not found/,
+    );
+    assert.equal((await findGoal(owner, saved.id))?.targetDate, null);
   },
 );

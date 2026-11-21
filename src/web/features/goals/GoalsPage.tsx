@@ -2,12 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { AuthGate } from '../auth/AuthGate.js';
 import { supabase } from '../../lib/supabase.js';
 import { GoalDetails } from './GoalDetails.js';
-import {
-  createGoal,
-  deleteGoal as removeGoal,
-  listGoals,
-  type Goal,
-} from './goal-api.js';
+import type { Goal } from '../../../shared/goal.js';
+import { createGoal, deleteGoal as removeGoal, listGoals } from './goal-api.js';
 
 export function GoalsPage() {
   return (
@@ -66,6 +62,25 @@ function GoalsWorkspace() {
     }
   }
 
+  /** Saves a change to the selected goal and replaces it in the list. */
+  async function handleUpdate(change: () => Promise<Goal>, success: string) {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const saved = await change();
+      setGoals((previous) =>
+        previous.map((item) => (item.id === saved.id ? saved : item)),
+      );
+      setSelected(saved);
+      setMessage(success);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleDelete(goal: Goal) {
     const confirmed = window.confirm(
       `Delete ${goal.title}? This action cannot be undone.`,
@@ -115,6 +130,10 @@ function GoalsWorkspace() {
                 placeholder="Describe your academic goal..."
               />
             </label>
+            <label>
+              Target date (optional)
+              <input name="targetDate" type="date" />
+            </label>
             <button disabled={busy}>{busy ? 'Saving…' : 'Add goal'}</button>
           </form>
 
@@ -130,6 +149,7 @@ function GoalsWorkspace() {
                   >
                     {goal.title}
                   </button>
+                  {goal.targetDate && <> due by {goal.targetDate}</>}
                 </li>
               ))}
             </ul>
@@ -138,7 +158,12 @@ function GoalsWorkspace() {
           )}
 
           {selected && (
-            <GoalDetails goal={selected} busy={busy} onDelete={handleDelete} />
+            <GoalDetails
+              goal={selected}
+              busy={busy}
+              onDelete={handleDelete}
+              onUpdate={handleUpdate}
+            />
           )}
         </>
       )}
