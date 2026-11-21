@@ -29,6 +29,19 @@ const NotificationsPage = lazy(() =>
     default: module.NotificationsPage,
   })),
 );
+
+const GoalsPage = lazy(() =>
+  import('./features/goals/GoalsPage.js').then((module) => ({
+    default: module.GoalsPage,
+  })),
+);
+
+const ProgressPage = lazy(() =>
+  import('./features/progress/ProgressPage.js').then((module) => ({
+    default: module.ProgressPage,
+  })),
+);
+
 const configured = Boolean(
   import.meta.env.VITE_SUPABASE_URL &&
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -60,6 +73,8 @@ createRoot(document.getElementById('root')!).render(
           <Link to="/study">Study</Link>
           <Link to="/settings">Settings</Link>
           <Link to="/notifications">Notifications</Link>
+          <Link to="/goals">Goals</Link>
+          <Link to="/progress">Dashboard</Link>
         </nav>
       </header>
       <main>
@@ -72,7 +87,10 @@ createRoot(document.getElementById('root')!).render(
                 <p>
                   Organize courses, assignments, and study time with StudyFlow.
                 </p>
-                <Link to="/courses">Course workspace</Link>
+                <p>
+                  <Link to="/progress">Progress dashboard</Link> ·{' '}
+                  <Link to="/courses">Course workspace</Link>
+                </p>
               </>
             }
           />
@@ -113,6 +131,22 @@ createRoot(document.getElementById('root')!).render(
             element={
               <Workspace name="Notifications">
                 <NotificationsPage />
+              </Workspace>
+            }
+          />
+          <Route
+            path="/goals"
+            element={
+              <Workspace name="Goals">
+                <GoalsPage />
+              </Workspace>
+            }
+          />
+          <Route
+            path="/progress"
+            element={
+              <Workspace name="Progress dashboards">
+                <ProgressPage />
               </Workspace>
             }
           />
