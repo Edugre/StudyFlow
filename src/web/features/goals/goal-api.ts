@@ -1,29 +1,38 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 import { isDate } from '../../../shared/dates.js';
 import type { Goal } from '../../../shared/goal.js';
-import { isId } from '../../lib/linked-course.js';
+import { courseLink, isId } from '../../lib/linked-course.js';
 
 /**
- * Academic goal data access (GP-01) with target dates (GP-02). Ownership is
- * enforced by row level security.
+ * Academic goal data access (GP-01) with target dates (GP-02) and course
+ * links (GP-03). Ownership is enforced by row level security.
  */
 type Row = {
   id: string;
   title: string;
   message: string;
   target_date: string | null;
+  course_id: string | null;
   created_at: string;
 };
-const columns = 'id, title, message, target_date, created_at';
+const columns = 'id, title, message, target_date, course_id, created_at';
 const toGoal = (row: Row): Goal => ({
   id: row.id,
   title: row.title,
   message: row.message,
   targetDate: row.target_date,
+  courseId: row.course_id,
   createdAt: row.created_at,
 });
 
+/**
+ * Row level security rejects links to courses the student does not own
+ * (42501), and a deleted course fails the foreign key (23503); both read as
+ * a missing course.
+ */
 function fail(error: PostgrestError, action: string): never {
+  if (error.code === '42501' || error.code === '23503')
+    throw new Error('Course not found');
   if (
     error.code === '23514' ||
     error.code === '22007' ||
@@ -33,13 +42,20 @@ function fail(error: PostgrestError, action: string): never {
   throw new Error(`Unable to ${action}.`);
 }
 
-/** Retrieves signed-in student's goals, newest first. */
-export async function listGoals(client: SupabaseClient) {
-  const { data, error } = await client
+/**
+ * The signed-in student's goals, newest first: all of them, or (GP-03) only
+ * those linked to one course.
+ */
+export async function listGoals(client: SupabaseClient, courseId?: string) {
+  let query = client
     .from('goals')
     .select(columns)
-    .order('created_at', { ascending: false })
-    .overrideTypes<Row[]>();
+    .order('created_at', { ascending: false });
+  if (courseId !== undefined) {
+    if (!isId(courseId)) return [];
+    query = query.eq('course_id', courseId);
+  }
+  const { data, error } = await query.overrideTypes<Row[]>();
   if (error) fail(error, 'load goals');
   return data.map(toGoal);
 }
@@ -87,6 +103,7 @@ export async function createGoal(
     title: input.title.trim(),
     message: input.message.trim(),
     target_date: targetDate(input.targetDate),
+    course_id: courseLink(input.courseId),
   };
   const { data, error } = await client
     .from('goals')
@@ -125,6 +142,15 @@ export async function setGoalTargetDate(
   value: unknown,
 ) {
   return updateGoal(client, id, { target_date: targetDate(value) });
+}
+
+/** GP-03: links the goal to another course, or unlinks it with null. */
+export async function setGoalCourse(
+  client: SupabaseClient,
+  id: string,
+  courseId: unknown,
+) {
+  return updateGoal(client, id, { course_id: courseLink(courseId) });
 }
 
 export async function deleteGoal(client: SupabaseClient, id: string) {

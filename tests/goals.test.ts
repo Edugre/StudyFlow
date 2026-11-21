@@ -6,9 +6,14 @@ import {
   deleteGoal,
   findGoal,
   listGoals,
+  setGoalCourse,
   setGoalTargetDate,
   targetDateError,
 } from '../src/web/features/goals/goal-api.js';
+import {
+  createCourse,
+  deleteCourse,
+} from '../src/web/features/courses/course-api.js';
 import { account, stack } from './support/supabase.js';
 
 // Invalid input must be rejected before any request is made.
@@ -146,5 +151,82 @@ test(
       /Goal not found/,
     );
     assert.equal((await findGoal(owner, saved.id))?.targetDate, null);
+  },
+);
+
+test(
+  'GP-03: a goal displays its course after reopening',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const biology = await createCourse(student, { name: 'Biology' });
+    const saved = await createGoal(student, { ...goal, courseId: math.id });
+    assert.equal(saved.courseId, math.id);
+    assert.equal((await findGoal(student, saved.id))?.courseId, math.id);
+    await setGoalCourse(student, saved.id, biology.id);
+    assert.equal((await findGoal(student, saved.id))?.courseId, biology.id);
+    await setGoalCourse(student, saved.id, '');
+    assert.equal((await findGoal(student, saved.id))?.courseId, null);
+    assert.equal((await listGoals(student)).length, 1);
+  },
+);
+
+test(
+  "GP-03: a course's goals list shows only goals linked to it",
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const biology = await createCourse(student, { name: 'Biology' });
+    const calculus = await createGoal(student, {
+      ...goal,
+      courseId: math.id,
+    });
+    const cells = await createGoal(student, {
+      title: 'Learn cells',
+      message: 'Know the organelles',
+      courseId: biology.id,
+    });
+    await createGoal(student, { title: 'Read', message: 'Two books' });
+    assert.deepEqual(await listGoals(student, math.id), [calculus]);
+    assert.deepEqual(await listGoals(student, biology.id), [cells]);
+    assert.equal((await listGoals(student)).length, 3);
+  },
+);
+
+test(
+  "GP-03: goals cannot link to another student's course",
+  { skip: stack },
+  async () => {
+    const owner = await account();
+    const other = await account();
+    const theirs = await createCourse(other, { name: 'Theirs' });
+    await assert.rejects(
+      createGoal(owner, { ...goal, courseId: theirs.id }),
+      /Course not found/,
+    );
+    const saved = await createGoal(owner, goal);
+    await assert.rejects(
+      setGoalCourse(owner, saved.id, theirs.id),
+      /Course not found/,
+    );
+    await assert.rejects(
+      setGoalCourse(owner, saved.id, 'not-an-id'),
+      /Course not found/,
+    );
+    assert.equal((await findGoal(owner, saved.id))?.courseId, null);
+  },
+);
+
+test(
+  'GP-03: deleting a course keeps its goals, unlinked',
+  { skip: stack },
+  async () => {
+    const student = await account();
+    const math = await createCourse(student, { name: 'Math' });
+    const saved = await createGoal(student, { ...goal, courseId: math.id });
+    await deleteCourse(student, math.id);
+    assert.equal((await findGoal(student, saved.id))?.courseId, null);
   },
 );

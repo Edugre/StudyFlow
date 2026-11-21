@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { AuthGate } from '../auth/AuthGate.js';
-import { supabase } from '../../lib/supabase.js';
-import { GoalDetails } from './GoalDetails.js';
 import type { Goal } from '../../../shared/goal.js';
+import { supabase } from '../../lib/supabase.js';
+import { AuthGate } from '../auth/AuthGate.js';
+import { listCourses, type SavedCourse } from '../courses/course-api.js';
+import { GoalDetails } from './GoalDetails.js';
 import { createGoal, deleteGoal as removeGoal, listGoals } from './goal-api.js';
 
 export function GoalsPage() {
@@ -14,9 +15,18 @@ export function GoalsPage() {
   );
 }
 
+/**
+ * GP-01: the student's academic goals, newest first, with a form to add one.
+ * GP-02: a goal can have a target date.
+ * GP-03: a goal can be linked to a course, and the list can show only one
+ * course's goals.
+ */
 function GoalsWorkspace() {
   const [ready, setReady] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [courses, setCourses] = useState<SavedCourse[]>([]);
+  // '' shows every goal; otherwise only goals linked to this course id.
+  const [courseFilter, setCourseFilter] = useState('');
   const [selected, setSelected] = useState<Goal | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -24,37 +34,40 @@ function GoalsWorkspace() {
 
   useEffect(() => {
     let active = true;
-    listGoals(supabase)
-      .then((saved) => {
-        if (active) {
-          setGoals(saved);
-          setReady(true);
-        }
+    Promise.all([listGoals(supabase), listCourses(supabase)])
+      .then(([savedGoals, savedCourses]) => {
+        if (!active) return;
+        setGoals(savedGoals);
+        setCourses(savedCourses);
+        setReady(true);
       })
       .catch((e) => {
-        if (active) {
-          setError(e instanceof Error ? e.message : 'Unable to load goals.');
-          setReady(true);
-        }
+        if (!active) return;
+        setError(e instanceof Error ? e.message : 'Unable to load goals.');
+        setReady(true);
       });
     return () => {
       active = false;
     };
   }, []);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const values = Object.fromEntries(new FormData(form));
+  const courseName = (goal: Goal) =>
+    courses.find((course) => course.id === goal.courseId)?.name ?? null;
+  const shown = courseFilter
+    ? goals.filter((goal) => goal.courseId === courseFilter)
+    : goals;
+  const courseOptions = courses.map((course) => (
+    <option key={course.id} value={course.id}>
+      {course.name}
+    </option>
+  ));
+
+  async function run(action: () => Promise<string>) {
     setBusy(true);
     setError('');
     setMessage('');
     try {
-      const goal = await createGoal(supabase, values);
-      setGoals((previous) => [goal, ...previous]);
-      setSelected(goal);
-      setMessage('Goal saved.');
-      form.reset();
+      setMessage(await action());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Request failed');
     } finally {
@@ -62,45 +75,43 @@ function GoalsWorkspace() {
     }
   }
 
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    void run(async () => {
+      const goal = await createGoal(supabase, values);
+      setGoals((previous) => [goal, ...previous]);
+      setSelected(goal);
+      form.reset();
+      return 'Goal saved.';
+    });
+  }
+
   /** Saves a change to the selected goal and replaces it in the list. */
-  async function handleUpdate(change: () => Promise<Goal>, success: string) {
-    setBusy(true);
-    setError('');
-    setMessage('');
-    try {
+  function handleUpdate(change: () => Promise<Goal>, success: string) {
+    void run(async () => {
       const saved = await change();
       setGoals((previous) =>
         previous.map((item) => (item.id === saved.id ? saved : item)),
       );
       setSelected(saved);
-      setMessage(success);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Request failed');
-    } finally {
-      setBusy(false);
-    }
+      return success;
+    });
   }
 
-  async function handleDelete(goal: Goal) {
+  function handleDelete(goal: Goal) {
     const confirmed = window.confirm(
       `Delete ${goal.title}? This action cannot be undone.`,
     );
     if (!confirmed) return;
-    setBusy(true);
-    setError('');
-    setMessage('');
-    try {
-      if (!(await removeGoal(supabase, goal.id))) {
+    void run(async () => {
+      if (!(await removeGoal(supabase, goal.id)))
         throw new Error('Goal not found');
-      }
       if (selected?.id === goal.id) setSelected(null);
       setGoals((previous) => previous.filter((item) => item.id !== goal.id));
-      setMessage('Goal deleted.');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Request failed');
-    } finally {
-      setBusy(false);
-    }
+      return 'Goal deleted.';
+    });
   }
 
   return (
@@ -134,13 +145,32 @@ function GoalsWorkspace() {
               Target date (optional)
               <input name="targetDate" type="date" />
             </label>
+            <label>
+              Course (optional)
+              <select name="courseId" defaultValue="">
+                <option value="">No course</option>
+                {courseOptions}
+              </select>
+            </label>
             <button disabled={busy}>{busy ? 'Saving…' : 'Add goal'}</button>
           </form>
 
           <h2>Saved goals</h2>
-          {goals.length ? (
+          {courses.length > 0 && (
+            <label>
+              Show goals for
+              <select
+                value={courseFilter}
+                onChange={(event) => setCourseFilter(event.target.value)}
+              >
+                <option value="">All courses</option>
+                {courseOptions}
+              </select>
+            </label>
+          )}
+          {shown.length ? (
             <ul>
-              {goals.map((goal) => (
+              {shown.map((goal) => (
                 <li key={goal.id}>
                   <button
                     type="button"
@@ -149,10 +179,18 @@ function GoalsWorkspace() {
                   >
                     {goal.title}
                   </button>
+                  {courseName(goal) && (
+                    <>
+                      {' '}
+                      <span className="tag">{courseName(goal)}</span>
+                    </>
+                  )}
                   {goal.targetDate && <> due by {goal.targetDate}</>}
                 </li>
               ))}
             </ul>
+          ) : courseFilter ? (
+            <p>No goals are linked to this course.</p>
           ) : (
             <p>No goals yet. Add your first goal above.</p>
           )}
@@ -160,6 +198,8 @@ function GoalsWorkspace() {
           {selected && (
             <GoalDetails
               goal={selected}
+              courseName={courseName(selected)}
+              courseOptions={courseOptions}
               busy={busy}
               onDelete={handleDelete}
               onUpdate={handleUpdate}
